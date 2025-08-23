@@ -676,4 +676,14 @@ M.setup_hover = function(bufnr)
 	})
 end
 
+-- Check blink.cmp integration status for health checks
+M.check_blink_integration = function()
+	local ok_blink, _ = pcall(require, "blink.cmp")
+	if ok_blink then
+		return true, "Available and working"
+	else
+		return false, "Not installed or not available"
+	end
+end
+
 return M
