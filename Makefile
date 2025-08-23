@@ -15,12 +15,12 @@ help:
 # Run tests
 test:
 	@echo "Running tests..."
-	@nvim --headless -c "luafile tests/config_test.lua"
-	@nvim --headless -c "luafile tests/fold_test.lua"
-	@nvim --headless -c "luafile tests/inlay_hints_test.lua"
-	@nvim --headless -c "luafile tests/navigation_test.lua"
-	@nvim --headless -c "luafile tests/symbols_test.lua"
-	@nvim --headless -c "luafile tests/utils_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/config_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/fold_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/inlay_hints_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/navigation_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/symbols_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/utils_test.lua"
 
 # Run linter
 lint:

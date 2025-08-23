@@ -29,15 +29,29 @@ jobs:
           which nvim
 
       - name: Run tests
-        run: make test
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
+          XDG_CONFIG_HOME: /tmp/empty
+          XDG_DATA_HOME: /tmp/empty
+        run: |
+          # Create empty config directory to prevent any config loading
+          mkdir -p /tmp/empty
+          # Run tests with minimal environment
+          make test
 
       - name: Test specific modules (if main tests fail)
         if: failure()
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
+          XDG_CONFIG_HOME: /tmp/empty
+          XDG_DATA_HOME: /tmp/empty
         run: |
           echo "Running individual test modules for debugging..."
-          nvim --headless -c "luafile tests/config_test.lua" || echo "Config tests failed"
-          nvim --headless -c "luafile tests/fold_test.lua" || echo "Fold tests failed"
-          nvim --headless -c "luafile tests/inlay_hints_test.lua" || echo "Inlay hints tests failed"
-          nvim --headless -c "luafile tests/navigation_test.lua" || echo "Navigation tests failed"
-          nvim --headless -c "luafile tests/symbols_test.lua" || echo "Symbols tests failed"
-          nvim --headless -c "luafile tests/utils_test.lua" || echo "Utils tests failed"
+          nvim --headless --noplugin --clean -c "luafile tests/config_test.lua" || echo "Config tests failed"
+          nvim --headless --noplugin --clean -c "luafile tests/fold_test.lua" || echo "Fold tests failed"
+          nvim --headless --noplugin --clean -c "luafile tests/inlay_hints_test.lua" || echo "Inlay hints tests failed"
+          nvim --headless --noplugin --clean -c "luafile tests/navigation_test.lua" || echo "Navigation tests failed"
+          nvim --headless --noplugin --clean -c "luafile tests/symbols_test.lua" || echo "Symbols tests failed"
+          nvim --headless --noplugin --clean -c "luafile tests/utils_test.lua" || echo "Utils tests failed"
