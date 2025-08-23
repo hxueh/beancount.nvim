@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  # Lint and format check
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install luacheck
+        run: luarocks install luacheck
+
+      - name: Run luacheck
+        run: |
+          luacheck lua/ --globals vim --std luajit --codes || true
+
+      - name: Install stylua
+        run: |
+          wget -qO- https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-x86_64.zip | funzip > stylua
+          chmod +x stylua
+          sudo mv stylua /usr/local/bin/
+
+      - name: Check formatting with stylua
+        run: |
+          stylua --check lua/ tests/ || echo "Style check failed - run 'stylua lua/ tests/' to fix"
+
+  # Unit tests
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim-version: ["stable", "nightly"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim-version }}
+
+      - name: Verify Neovim installation
+        run: |
+          echo "Neovim version:"
+          nvim --version
+          echo "Neovim location:"
+          which nvim
+
+      - name: Run all tests
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
+          XDG_CONFIG_HOME: /tmp/empty
+          XDG_DATA_HOME: /tmp/empty
+        run: |
+          # Create empty config directory to prevent any config loading
+          mkdir -p /tmp/empty
+          echo "Running test suite..."
+          make test
+
+      - name: Run individual test files (on failure)
+        if: failure()
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
+          XDG_CONFIG_HOME: /tmp/empty
+          XDG_DATA_HOME: /tmp/empty
+        run: |
+          echo "Main test failed, running individual modules for debugging..."
+
+          echo "=== Config Tests ==="
+          nvim --headless --noplugin --clean -c "luafile tests/config_test.lua" 2>&1 || echo "❌ Config tests failed"
+
+          echo "=== Fold Tests ==="
+          nvim --headless --noplugin --clean -c "luafile tests/fold_test.lua" 2>&1 || echo "❌ Fold tests failed"
+
+          echo "=== Inlay Hints Tests ==="
+          nvim --headless --noplugin --clean -c "luafile tests/inlay_hints_test.lua" 2>&1 || echo "❌ Inlay hints tests failed"
+
+          echo "=== Navigation Tests ==="
+          nvim --headless --noplugin --clean -c "luafile tests/navigation_test.lua" 2>&1 || echo "❌ Navigation tests failed"
+
+          echo "=== Symbols Tests ==="
+          nvim --headless --noplugin --clean -c "luafile tests/symbols_test.lua" 2>&1 || echo "❌ Symbols tests failed"
+
+          echo "=== Utils Tests ==="
+          nvim --headless --noplugin --clean -c "luafile tests/utils_test.lua" 2>&1 || echo "❌ Utils tests failed"

@@ -1,0 +1,19 @@
+; Options
+option "operating_currency" "USD"
+option "operating_currency" "GBP"
+option "operating_currency" "EUR"
+
+; Open Accounts
+2025-08-01 open Expenses:Food:Lunch
+2025-08-01 open Expenses:Food:Dinner
+2025-08-01 open Assets:Bank:JPM
+2025-08-01 open Assets:Bank:BofA
+2025-08-02 open Liabilities:Bank:JPM
+2025-08-02 open Liabilities:Bank:BofA
+2025-08-02 open Income:Salary
+
+; Close Accounts
+2025-08-05 close Liabilities:Bank:JPM
+
+; Ledger for 2025
+include "2025/*.beancount"

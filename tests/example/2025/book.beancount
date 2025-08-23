@@ -1,0 +1,11 @@
+2025-08-02 * "JPM" "Salary"
+    Income:Salary                                                -100.00 USD
+    Assets:Bank:JPM                                               100.00 USD
+
+2025-08-03 * "McDonald" "Lunch"
+    Expenses:Food:Lunch                                            10.00 USD
+    Liabilities:Bank:JPM
+
+2025-08-04 * "JPM" "Credit Card"
+    Liabilities:Bank:JPM                                           10.00 USD
+    Assets:Bank:JPM                                               -10.00 USD

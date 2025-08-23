@@ -2,6 +2,7 @@
 -- Tests all utility functions without complex test framework
 
 -- Add lua path to find beancount modules
+---@diagnostic disable-next-line: redundant-parameter
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 print("Running comprehensive utils tests...")
@@ -94,6 +95,7 @@ run_test("should return current file when no main file configured", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(path)
 		if path == "%:p" then
 			return "/path/to/current.beancount"
@@ -123,6 +125,7 @@ run_test("should return current file when main file is empty string", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(path)
 		if path == "%:p" then
 			return "/path/to/current.beancount"
@@ -194,6 +197,7 @@ run_test("should convert relative path to absolute", function()
 		return "/current/working/dir"
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.startswith = function(str, prefix)
 		return string.sub(str, 1, #prefix) == prefix
 	end
@@ -211,6 +215,7 @@ run_test("should resolve environment variables", function()
 
 	-- Mock os.getenv
 	local original_getenv = os.getenv
+	---@diagnostic disable-next-line: duplicate-set-field
 	os.getenv = function(var)
 		if var == "HOME" then
 			return "/home/user"
@@ -308,7 +313,8 @@ run_test("should get plugin directory correctly", function()
 	local original_getinfo = debug.getinfo
 	local original_fnamemodify = vim.fn.fnamemodify
 
-	debug.getinfo = function(level, what)
+	---@diagnostic disable-next-line: duplicate-set-field
+	debug.getinfo = function(_, _)
 		return { source = "@/path/to/beancount.nvim/lua/beancount/utils.lua" }
 	end
 
@@ -449,6 +455,7 @@ run_test("should handle environment variable edge cases", function()
 	local utils = get_utils()
 
 	local original_getenv = os.getenv
+	---@diagnostic disable-next-line: duplicate-set-field
 	os.getenv = function(var)
 		if var == "EMPTY" then
 			return ""
@@ -507,6 +514,7 @@ run_test("should handle complex main file scenarios", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.startswith = function(str, prefix)
 		return string.sub(str, 1, #prefix) == prefix
 	end
@@ -562,6 +570,7 @@ run_test("should handle Windows-style paths in get_main_bean_file", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.startswith = function(str, prefix)
 		return string.sub(str, 1, #prefix) == prefix
 	end
@@ -577,6 +586,7 @@ run_test("should handle malformed environment variable patterns", function()
 	local utils = get_utils()
 
 	local original_getenv = os.getenv
+	---@diagnostic disable-next-line: duplicate-set-field
 	os.getenv = function(var)
 		if var == "TEST" then
 			return "value"
@@ -674,7 +684,8 @@ run_test("should handle debug info variations in get_plugin_dir", function()
 	local original_fnamemodify = vim.fn.fnamemodify
 
 	-- Test with different source formats
-	debug.getinfo = function(level, what)
+	---@diagnostic disable-next-line: duplicate-set-field
+	debug.getinfo = function(_, _)
 		return { source = "@/different/path/to/plugin/lua/beancount/utils.lua" }
 	end
 
@@ -723,6 +734,7 @@ run_test("should handle special environment values in resolve_env_vars", functio
 	local utils = get_utils()
 
 	local original_getenv = os.getenv
+	---@diagnostic disable-next-line: duplicate-set-field
 	os.getenv = function(var)
 		local special_vars = {
 			["EMPTY"] = "",
@@ -770,6 +782,7 @@ run_test("should handle config module errors gracefully", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.startswith = function(str, prefix)
 		return string.sub(str, 1, #prefix) == prefix
 	end
@@ -826,6 +839,7 @@ run_test("should handle mixed operations correctly", function()
 	-- Test with environment-like string
 	local env_string = "%HOME%/documents/%USER%/file.txt"
 	local original_getenv = os.getenv
+	---@diagnostic disable-next-line: duplicate-set-field
 	os.getenv = function(var)
 		if var == "HOME" then
 			return "/home/user"
