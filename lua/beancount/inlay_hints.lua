@@ -134,7 +134,8 @@ M.render_hints = function(bufnr)
 
 			-- Use default separator column if no decimal point found
 			if not dot_pos then
-				dot_pos = config.get("separator_column") - 1
+				local separator_column = config.get("separator_column")
+				dot_pos = (separator_column or 70) - 1
 			end
 
 			local hint_text = pad_units(dot_pos, line_text, units)

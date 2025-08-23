@@ -57,8 +57,12 @@ M.get_main_bean_file = function()
 		end
 	end
 
+	-- Convert main_file to string if it's not already
+	main_file = tostring(main_file)
+
 	-- Convert relative paths to absolute paths
-	if main_file and not vim.startswith(main_file, "/") then
+	-- Check for Unix absolute paths (/) and Windows absolute paths (C:)
+	if main_file and not vim.startswith(main_file, "/") and not main_file:match("^%a:") then
 		local cwd = vim.fn.getcwd()
 		return cwd .. "/" .. main_file
 	end
@@ -81,6 +85,9 @@ end
 -- @param char string: Character to count
 -- @return number: Number of occurrences
 M.count_occurrences = function(str, char)
+	if not str or not char or str == "" or char == "" then
+		return 0
+	end
 	local count = 0
 	for i = 1, #str do
 		if str:sub(i, i) == char then
@@ -95,6 +102,9 @@ end
 -- @param value any: Value to search for
 -- @return boolean: True if value is found
 M.tbl_contains = function(tbl, value)
+	if not tbl then
+		return false
+	end
 	for _, v in ipairs(tbl) do
 		if v == value then
 			return true
@@ -107,13 +117,24 @@ end
 -- @param filename string: Filename to extract extension from
 -- @return string: File extension without dot
 M.get_file_extension = function(filename)
-	return filename:match("%.([^.]+)$")
+	if not filename then
+		return nil
+	end
+	-- Extract just the filename part (after last slash) then get extension
+	local basename = filename:match("[^/\\\\]*$")
+	if not basename or basename == "" then
+		return nil
+	end
+	return basename:match("%.([^.]+)$")
 end
 
 -- Check if a file exists on the filesystem
 -- @param path string: Path to check
 -- @return boolean: True if file exists
 M.file_exists = function(path)
+	if not path or path == "" then
+		return false
+	end
 	local stat = vim.loop.fs_stat(path)
 	return stat and stat.type == "file"
 end

@@ -94,8 +94,8 @@ M.show_errors = function(errors)
 
 	for _, error in ipairs(errors) do
 		local file = error.file
-		local line = error.line - 1 -- Convert to 0-based indexing
-		local message = error.message
+		local line = (error.line or 1) - 1 -- Convert to 0-based indexing, default to line 1
+		local message = error.message or "Unknown error"
 
 		if not diagnostics_by_file[file] then
 			diagnostics_by_file[file] = {}

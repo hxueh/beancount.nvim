@@ -15,10 +15,14 @@ M.foldexpr = function()
 
 	-- Major beancount directives each get their own fold
 	if
-		line:match("^%d%d%d%d%-%d%d%-%d%d%s+open")
-		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+close")
-		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+balance")
-		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+pad")
+		line:match("^%d%d%d%d%-%d%d%-%d%d%s+open%s")
+		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+close%s")
+		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+balance%s")
+		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+pad%s")
+		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+open$")
+		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+close$")
+		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+balance$")
+		or line:match("^%d%d%d%d%-%d%d%-%d%d%s+pad$")
 	then
 		return ">1"
 	end

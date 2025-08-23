@@ -26,6 +26,10 @@ end
 -- Navigate to the open directive for an account
 -- @param account string: Account name to find
 M.goto_account_definition = function(account)
+	if not account or account == "" then
+		vim.notify("No account specified", vim.log.levels.WARN)
+		return
+	end
 	-- Create search pattern for account's open directive
 	local search_pattern = "\\v^\\d{4}-\\d{2}-\\d{2}\\s+open\\s+" .. vim.fn.escape(account, "\\.*[]^$(){}+?|")
 

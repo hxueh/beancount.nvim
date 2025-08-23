@@ -364,7 +364,8 @@ M.setup = function()
 	local config = require("beancount.config")
 
 	-- Respect user's snippet configuration setting
-	if not config.get("snippets.enabled") then
+	local snippets_config = config.get("snippets")
+	if not snippets_config or not snippets_config.enabled then
 		return
 	end
 

@@ -88,8 +88,11 @@ M.align_current_line = function()
 end
 
 M.is_posting_line = function(line)
+	if not line or type(line) ~= "string" then
+		return false
+	end
 	-- Posting lines start with whitespace and contain an account
-	return line:match("^%s+[A-Z][a-zA-Z0-9:_-]+")
+	return line:match("^%s+[A-Z][a-zA-Z0-9:_-]+") ~= nil
 end
 
 M.align_amount = function(line_num)

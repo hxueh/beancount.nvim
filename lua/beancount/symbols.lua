@@ -63,7 +63,23 @@ M.parse_line_for_symbol = function(line, line_num)
 	end
 
 	-- Parse transaction lines (YYYY-MM-DD * "Payee" "Narration")
-	local date, flag, payee, narration = line:match('^(%d%d%d%d%-%d%d%-%d%d)%s+([*!])%s*"?([^"]*)"?%s*"?([^"]*)"?')
+	-- Handle properly quoted strings and unquoted strings
+	local date, flag, rest = line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+([*!])%s*(.*)")
+	local payee, narration
+	if rest then
+		-- Try to match quoted payee and narration first
+		payee, narration = rest:match('^"([^"]*)"?%s*"?([^"]*)"?')
+		if not payee then
+			-- Try unquoted format
+			payee, narration = rest:match("^([^%s]+)%s*(.*)")
+			if payee == '""' then
+				payee = ""
+			end
+			if narration == '""' then
+				narration = ""
+			end
+		end
+	end
 	if date and flag then
 		local name = payee and payee ~= "" and payee or (narration and narration ~= "" and narration or "Transaction")
 		local detail = flag == "*" and "Completed" or "Incomplete"
@@ -107,8 +123,8 @@ M.parse_line_for_symbol = function(line, line_num)
 				["end"] = { line = line_num, character = #line },
 			},
 			selectionRange = {
-				start = { line = line_num, character = line:find(account) - 1 },
-				["end"] = { line = line_num, character = line:find(account) + #account - 1 },
+				start = { line = line_num, character = (line:find(account, 1, true) or 1) - 1 },
+				["end"] = { line = line_num, character = (line:find(account, 1, true) or 1) + #account - 1 },
 			},
 		}
 	end
@@ -125,8 +141,8 @@ M.parse_line_for_symbol = function(line, line_num)
 				["end"] = { line = line_num, character = #line },
 			},
 			selectionRange = {
-				start = { line = line_num, character = line:find(close_account) - 1 },
-				["end"] = { line = line_num, character = line:find(close_account) + #close_account - 1 },
+				start = { line = line_num, character = (line:find(close_account, 1, true) or 1) - 1 },
+				["end"] = { line = line_num, character = (line:find(close_account, 1, true) or 1) + #close_account - 1 },
 			},
 		}
 	end
@@ -143,8 +159,8 @@ M.parse_line_for_symbol = function(line, line_num)
 				["end"] = { line = line_num, character = #line },
 			},
 			selectionRange = {
-				start = { line = line_num, character = line:find(commodity) - 1 },
-				["end"] = { line = line_num, character = line:find(commodity) + #commodity - 1 },
+				start = { line = line_num, character = (line:find(commodity, 1, true) or 1) - 1 },
+				["end"] = { line = line_num, character = (line:find(commodity, 1, true) or 1) + #commodity - 1 },
 			},
 		}
 	end
@@ -199,8 +215,8 @@ M.parse_line_for_symbol = function(line, line_num)
 				["end"] = { line = line_num, character = #line },
 			},
 			selectionRange = {
-				start = { line = line_num, character = line:find(option_name) - 1 },
-				["end"] = { line = line_num, character = line:find(option_name) + #option_name - 1 },
+				start = { line = line_num, character = (line:find(option_name, 1, true) or 1) - 1 },
+				["end"] = { line = line_num, character = (line:find(option_name, 1, true) or 1) + #option_name - 1 },
 			},
 		}
 	end
@@ -217,8 +233,8 @@ M.parse_line_for_symbol = function(line, line_num)
 				["end"] = { line = line_num, character = #line },
 			},
 			selectionRange = {
-				start = { line = line_num, character = line:find(plugin_name) - 1 },
-				["end"] = { line = line_num, character = line:find(plugin_name) + #plugin_name - 1 },
+				start = { line = line_num, character = (line:find(plugin_name, 1, true) or 1) - 1 },
+				["end"] = { line = line_num, character = (line:find(plugin_name, 1, true) or 1) + #plugin_name - 1 },
 			},
 		}
 	end
@@ -235,8 +251,46 @@ M.parse_line_for_symbol = function(line, line_num)
 				["end"] = { line = line_num, character = #line },
 			},
 			selectionRange = {
-				start = { line = line_num, character = line:find(include_file) - 1 },
-				["end"] = { line = line_num, character = line:find(include_file) + #include_file - 1 },
+				start = { line = line_num, character = (line:find(include_file, 1, true) or 1) - 1 },
+				["end"] = { line = line_num, character = (line:find(include_file, 1, true) or 1) + #include_file - 1 },
+			},
+		}
+	end
+
+	-- Parse pad directives
+	local pad_date, pad_account, pad_source =
+		line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+pad%s+([A-Za-z0-9:_-]+)%s+([A-Za-z0-9:_-]+)")
+	if pad_date and pad_account and pad_source then
+		return {
+			name = string.format("%s <- %s", pad_account, pad_source),
+			detail = "Pad directive",
+			kind = SymbolKind.Method,
+			range = {
+				start = { line = line_num, character = 0 },
+				["end"] = { line = line_num, character = #line },
+			},
+			selectionRange = {
+				start = { line = line_num, character = 0 },
+				["end"] = { line = line_num, character = #line },
+			},
+		}
+	end
+
+	-- Parse event directives
+	local event_date, event_type = line:match('^(%d%d%d%d%-%d%d%-%d%d)%s+event%s+"([^"]+)"')
+	if event_date and event_type then
+		local event_description = line:match('^%d%d%d%d%-%d%d%-%d%d%s+event%s+"[^"]+"%s+"([^"]*)"') or ""
+		return {
+			name = event_type,
+			detail = "Event: " .. event_description,
+			kind = SymbolKind.Event,
+			range = {
+				start = { line = line_num, character = 0 },
+				["end"] = { line = line_num, character = #line },
+			},
+			selectionRange = {
+				start = { line = line_num, character = 0 },
+				["end"] = { line = line_num, character = #line },
 			},
 		}
 	end

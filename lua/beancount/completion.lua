@@ -333,6 +333,11 @@ end
 M.get_account_completions = function(prefix)
 	local items = {}
 
+	-- Handle nil prefix
+	if not prefix then
+		prefix = ""
+	end
+
 	-- Handle completion after colon - find accounts that start with the prefix
 	local prefix_lower = prefix:lower()
 
@@ -601,7 +606,7 @@ end
 M.show_hover = function()
 	local pos = vim.api.nvim_win_get_cursor(0)
 	local line = pos[1] - 1 -- Convert to 0-based
-	local col = pos[2]   -- Already 0-based
+	local col = pos[2] -- Already 0-based
 
 	local hover_info = M.hover(0, line, col)
 	if not hover_info then
@@ -616,7 +621,7 @@ M.show_hover = function()
 	for _, line_content in ipairs(content) do
 		width = math.max(width, #line_content)
 	end
-	width = math.min(width, 80)        -- Max width
+	width = math.min(width, 80) -- Max width
 
 	local height = math.min(#content, 20) -- Max height
 
