@@ -216,7 +216,8 @@ run_test("should resolve environment variables", function()
 	-- Mock os.getenv
 	local original_getenv = os.getenv
 	---@diagnostic disable-next-line: duplicate-set-field
-	os.getenv = function(var)
+	---@diagnostic disable-next-line: inject-field
+	os.getenv = function(var) --luacheck: ignore
 		if var == "HOME" then
 			return "/home/user"
 		elseif var == "USER" then
@@ -234,7 +235,8 @@ run_test("should resolve environment variables", function()
 	local result3 = utils.resolve_env_vars("%NONEXISTENT%/path")
 	test_assert(result3 == "/path", "should replace non-existent vars with empty string")
 
-	os.getenv = original_getenv
+	---@diagnostic disable-next-line: inject-field
+	os.getenv = original_getenv --luacheck: ignore
 end)
 
 -- Test 9: count_occurrences function
@@ -314,7 +316,8 @@ run_test("should get plugin directory correctly", function()
 	local original_fnamemodify = vim.fn.fnamemodify
 
 	---@diagnostic disable-next-line: duplicate-set-field
-	debug.getinfo = function(_, _)
+	---@diagnostic disable-next-line: inject-field
+	debug.getinfo = function(_, _) --luacheck: ignore
 		return { source = "@/path/to/beancount.nvim/lua/beancount/utils.lua" }
 	end
 
@@ -328,7 +331,8 @@ run_test("should get plugin directory correctly", function()
 	local plugin_dir = utils.get_plugin_dir()
 	test_assert(plugin_dir == "/path/to/beancount.nvim", "should return correct plugin directory")
 
-	debug.getinfo = original_getinfo
+	---@diagnostic disable-next-line: inject-field
+	debug.getinfo = original_getinfo --luacheck: ignore
 	vim.fn.fnamemodify = original_fnamemodify
 end)
 
@@ -456,7 +460,7 @@ run_test("should handle environment variable edge cases", function()
 
 	local original_getenv = os.getenv
 	---@diagnostic disable-next-line: duplicate-set-field
-	os.getenv = function(var)
+	os.getenv = function(var) --luacheck: ignore
 		if var == "EMPTY" then
 			return ""
 		elseif var == "SPACE" then
@@ -476,7 +480,8 @@ run_test("should handle environment variable edge cases", function()
 		"should leave strings without variables unchanged"
 	)
 
-	os.getenv = original_getenv
+	---@diagnostic disable-next-line: inject-field
+	os.getenv = original_getenv --luacheck: ignore
 end)
 
 -- Test 21: File existence with various path types
@@ -587,7 +592,7 @@ run_test("should handle malformed environment variable patterns", function()
 
 	local original_getenv = os.getenv
 	---@diagnostic disable-next-line: duplicate-set-field
-	os.getenv = function(var)
+	os.getenv = function(var) --luacheck: ignore
 		if var == "TEST" then
 			return "value"
 		end
@@ -601,7 +606,8 @@ run_test("should handle malformed environment variable patterns", function()
 	test_assert(utils.resolve_env_vars("%TEST%%TEST%") == "valuevalue", "should handle adjacent variables")
 	test_assert(utils.resolve_env_vars("") == "", "should handle empty string")
 
-	os.getenv = original_getenv
+	---@diagnostic disable-next-line: inject-field
+	os.getenv = original_getenv --luacheck: ignore
 end)
 
 -- Test 26: count_occurrences with Unicode and special characters
@@ -685,7 +691,8 @@ run_test("should handle debug info variations in get_plugin_dir", function()
 
 	-- Test with different source formats
 	---@diagnostic disable-next-line: duplicate-set-field
-	debug.getinfo = function(_, _)
+	---@diagnostic disable-next-line: inject-field
+	debug.getinfo = function(_, _) --luacheck: ignore
 		return { source = "@/different/path/to/plugin/lua/beancount/utils.lua" }
 	end
 
@@ -708,7 +715,8 @@ run_test("should handle debug info variations in get_plugin_dir", function()
 	local plugin_dir = utils.get_plugin_dir()
 	test_assert(plugin_dir == "/different/path/to/plugin", "should handle different plugin paths")
 
-	debug.getinfo = original_getinfo
+	---@diagnostic disable-next-line: inject-field
+	debug.getinfo = original_getinfo --luacheck: ignore
 	vim.fn.fnamemodify = original_fnamemodify
 end)
 
@@ -735,7 +743,7 @@ run_test("should handle special environment values in resolve_env_vars", functio
 
 	local original_getenv = os.getenv
 	---@diagnostic disable-next-line: duplicate-set-field
-	os.getenv = function(var)
+	os.getenv = function(var) --luacheck: ignore
 		local special_vars = {
 			["EMPTY"] = "",
 			["SPACES"] = "  value with spaces  ",
@@ -754,7 +762,8 @@ run_test("should handle special environment values in resolve_env_vars", functio
 	test_assert(utils.resolve_env_vars("%NEWLINES%") == "line1\nline2", "should handle newlines")
 	test_assert(utils.resolve_env_vars("%PERCENT%") == "50%", "should handle percent in values")
 
-	os.getenv = original_getenv
+	---@diagnostic disable-next-line: inject-field
+	os.getenv = original_getenv --luacheck: ignore
 end)
 
 -- Test 33: get_main_bean_file with config module errors
@@ -840,7 +849,7 @@ run_test("should handle mixed operations correctly", function()
 	local env_string = "%HOME%/documents/%USER%/file.txt"
 	local original_getenv = os.getenv
 	---@diagnostic disable-next-line: duplicate-set-field
-	os.getenv = function(var)
+	os.getenv = function(var) --luacheck: ignore
 		if var == "HOME" then
 			return "/home/user"
 		elseif var == "USER" then
@@ -852,7 +861,8 @@ run_test("should handle mixed operations correctly", function()
 	local resolved = utils.resolve_env_vars(env_string)
 	test_assert(resolved == "/home/user/documents/testuser/file.txt", "should resolve complex paths")
 
-	os.getenv = original_getenv
+	---@diagnostic disable-next-line: inject-field
+	os.getenv = original_getenv --luacheck: ignore
 end)
 
 -- Print summary

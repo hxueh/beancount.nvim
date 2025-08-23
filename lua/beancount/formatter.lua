@@ -4,7 +4,6 @@
 local M = {}
 
 local config = require("beancount.config")
-local utils = require("beancount.utils")
 
 -- Initialize the formatter module
 -- No global setup required
@@ -225,7 +224,7 @@ end
 M.display_width = function(text)
 	if config.get("fixed_cjk_width") then
 		local width = 0
-		for _, char in utf8.codes(text) do
+		for _, char in require("utf8").codes(text) do
 			if M.is_cjk_char(char) then
 				width = width + 2
 			else
@@ -267,8 +266,7 @@ M.format_buffer = function()
 	end
 
 	-- Debug: uncomment to see formatting activity
-	if formatted_lines > 0 then
-	else
+	if formatted_lines == 0 then
 		vim.notify("No posting lines found to format", vim.log.levels.WARN)
 	end
 end

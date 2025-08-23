@@ -19,7 +19,6 @@ M.goto_definition = function()
 	-- Handle include statement navigation to file
 	elseif line:match('include%s+"[^"]*"') then
 		M.goto_include_file(line)
-	else
 	end
 end
 

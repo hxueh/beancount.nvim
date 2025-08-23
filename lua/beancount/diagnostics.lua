@@ -71,8 +71,8 @@ M.process_diagnostics = function(output)
 	end
 
 	-- Parse and display flag-based warnings
-	local ok, flags = pcall(vim.json.decode, flags_json)
-	if ok and flags then
+	local flags_ok, flags = pcall(vim.json.decode, flags_json)
+	if flags_ok and flags then
 		M.show_flags(flags)
 	end
 

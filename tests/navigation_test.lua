@@ -707,10 +707,10 @@ run_test("should create namespace for document links", function()
 
 	-- Force module reload to trigger namespace creation
 	package.loaded["beancount.navigation"] = nil
-	nav = require("beancount.navigation")
+	local new_nav = require("beancount.navigation")
 
 	test_assert(namespace_called, "should create namespace on module load")
-	test_assert(nav.namespace == 123, "should store namespace ID")
+	test_assert(new_nav.namespace == 123, "should store namespace ID")
 
 	vim.api.nvim_create_namespace = original_nvim_create_namespace
 end)

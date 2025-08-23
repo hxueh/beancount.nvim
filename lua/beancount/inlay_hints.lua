@@ -4,7 +4,6 @@
 local M = {}
 
 local config = require("beancount.config")
-local utils = require("beancount.utils")
 
 -- Namespace for virtual text hints
 M.namespace = vim.api.nvim_create_namespace("beancount_inlay_hints")
@@ -103,6 +102,7 @@ M.render_hints = function(bufnr)
 	-- Remove any existing virtual text before adding new hints
 	vim.api.nvim_buf_clear_namespace(bufnr, M.namespace, 0, -1)
 
+	---@diagnostic disable-next-line: param-type-mismatch
 	for line_str, units in pairs(file_automatics) do
 		local line_num = tonumber(line_str) - 1 -- Convert to 0-based
 
@@ -154,6 +154,7 @@ end
 M.update_visible_buffers = function()
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
 		local bufnr = vim.api.nvim_win_get_buf(win)
+		---@diagnostic disable-next-line: undefined-field
 		if vim.bo[bufnr].filetype == "beancount" and is_tracked_buffer(bufnr) then
 			M.render_hints(bufnr)
 		end

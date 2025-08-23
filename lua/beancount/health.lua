@@ -18,7 +18,7 @@ M.check = function()
 
 	-- Check Python
 	local python_path = config.get("python_path")
-	local python_job = vim.fn.jobstart({ python_path, "--version" }, {
+	vim.fn.jobstart({ python_path, "--version" }, {
 		stdout_buffered = true,
 		on_stdout = function(_, data)
 			if data and data[1] then
@@ -33,7 +33,7 @@ M.check = function()
 	})
 
 	-- Check beancount
-	local beancount_job = vim.fn.jobstart({ python_path, "-c", "import beancount; print(beancount.__version__)" }, {
+	vim.fn.jobstart({ python_path, "-c", "import beancount; print(beancount.__version__)" }, {
 		stdout_buffered = true,
 		on_stdout = function(_, data)
 			if data and data[1] then
@@ -69,7 +69,7 @@ M.check = function()
 		vim.health.info("blink.cmp integration: " .. message)
 	end
 
-	local ok, luasnip = pcall(require, "luasnip")
+	local ok = pcall(require, "luasnip")
 	if ok then
 		vim.health.ok("LuaSnip found - snippets available")
 	else

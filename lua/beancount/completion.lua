@@ -45,7 +45,6 @@ M.setup_buffer = function(bufnr)
 				vim.schedule(function()
 					local pos = vim.api.nvim_win_get_cursor(0)
 					local line = vim.api.nvim_get_current_line()
-					local col = pos[2] + 1 -- +1 because we're about to insert the space
 
 					-- Check if this space would be after an amount
 					local before_space = line:sub(1, pos[2])
