@@ -37,7 +37,7 @@ M.goto_account_definition = function(account)
 	local pos = vim.fn.search(search_pattern, "nw")
 	if pos > 0 then
 		vim.fn.cursor(pos, 1)
-		vim.cmd("normal! zz")
+		pcall(vim.cmd, "normal! zz")
 		return
 	end
 
@@ -48,10 +48,10 @@ M.goto_account_definition = function(account)
 	for _, file in ipairs(files) do
 		local lines = vim.fn.readfile(file)
 		for i, line in ipairs(lines) do
-			if line:match("^%d%d%d%d%-%d%d%-%d%d%s+open%s+" .. account) then
-				vim.cmd("edit " .. file)
+			if line:match("^%d%d%d%d%-%d%d%-%d%d%s+open%s+" .. vim.fn.escape(account, "\\.*[]^$(){}+?|")) then
+				pcall(vim.cmd, "edit " .. file)
 				vim.fn.cursor(i, 1)
-				vim.cmd("normal! zz")
+				pcall(vim.cmd, "normal! zz")
 				return
 			end
 		end
@@ -83,9 +83,9 @@ M.open_include_file = function(filename)
 	local full_path = current_dir .. "/" .. filename
 
 	if vim.fn.filereadable(full_path) == 1 then
-		vim.cmd("edit " .. full_path)
+		pcall(vim.cmd, "edit " .. full_path)
 	elseif vim.fn.filereadable(filename) == 1 then
-		vim.cmd("edit " .. filename)
+		pcall(vim.cmd, "edit " .. filename)
 	else
 		vim.notify("Include file not found: " .. filename, vim.log.levels.WARN)
 	end
@@ -118,8 +118,9 @@ M.list_accounts = function()
 
 	if #accounts > 0 then
 		vim.fn.setqflist(accounts, "r")
-		vim.cmd("copen")
+		pcall(vim.cmd, "copen")
 	else
+		vim.notify("No accounts found", vim.log.levels.WARN)
 	end
 end
 
@@ -144,9 +145,23 @@ M.find_document_links = function(bufnr)
 	local links = {}
 
 	for line_num, line in ipairs(lines) do
-		-- Look for include statements with beancount/bean file extensions
-		for filename in line:gmatch('include%s+"([^"]+%.(?:beancount|bean))"') do
-			local start_pos = line:find('"' .. vim.pesc(filename) .. '"')
+		-- Look for include statements with .beancount extension
+		for filename in line:gmatch('include%s+"([^"]+%.beancount)"') do
+			local start_pos = line:find('"' .. vim.fn.escape(filename, "\\.*[]^$(){}+?|") .. '"')
+			if start_pos then
+				table.insert(links, {
+					range = {
+						start = { line = line_num - 1, character = start_pos - 1 },
+						["end"] = { line = line_num - 1, character = start_pos + #filename + 1 },
+					},
+					target = filename,
+					tooltip = "Follow link to " .. filename,
+				})
+			end
+		end
+		-- Also look for include statements with .bean extension
+		for filename in line:gmatch('include%s+"([^"]+%.bean)"') do
+			local start_pos = line:find('"' .. vim.fn.escape(filename, "\\.*[]^$(){}+?|") .. '"')
 			if start_pos then
 				table.insert(links, {
 					range = {
@@ -252,7 +267,7 @@ M.setup_buffer = function(bufnr)
 			M.goto_include_file(line)
 		else
 			-- Use standard 'gf' behavior for non-include lines
-			vim.cmd("normal! gf")
+			pcall(vim.cmd, "normal! gf")
 		end
 	end, { buffer = bufnr, desc = "Go to file or follow include" })
 end

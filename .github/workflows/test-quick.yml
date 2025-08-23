@@ -1,0 +1,27 @@
+name: Quick Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quick-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Neovim (stable)
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: "stable"
+
+      - name: Run tests
+        run: |
+          echo "Running beancount.nvim test suite..."
+          make test
+          echo "✅ All tests completed successfully!"

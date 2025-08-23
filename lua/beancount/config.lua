@@ -123,6 +123,7 @@ M.setup = function(opts)
 
 	-- Configure Neovim's built-in diagnostics with our UI settings
 	if M.options.ui then
+		---@diagnostic disable-next-line: redundant-parameter
 		vim.diagnostic.config({
 			virtual_text = M.options.ui.virtual_text,
 			signs = M.options.ui.signs,

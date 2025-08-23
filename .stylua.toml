@@ -1,0 +1,18 @@
+# StyLua configuration for beancount.nvim
+
+# Use tabs for indentation (common in Neovim plugin ecosystem)
+indent_type = "Tabs"
+indent_width = 1
+
+# Line width before wrapping
+column_width = 120
+
+# Formatting options
+quote_style = "AutoPreferDouble"
+call_parentheses = "Always" 
+
+# Collapse simple statements
+collapse_simple_statement = "Always"
+
+# End of line style
+end_of_line = "Unix"
