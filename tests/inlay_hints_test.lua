@@ -100,7 +100,7 @@ vim.log = {
 		ERROR = 1,
 		INFO = 3,
 		DEBUG = 4,
-	}
+	},
 }
 
 vim.notify = function(msg, level)
@@ -205,13 +205,21 @@ vim.api = {
 vim.bo = { filetype = "beancount" }
 
 vim.deep_equal = function(a, b)
-	if type(a) ~= type(b) then return false end
-	if type(a) ~= "table" then return a == b end
+	if type(a) ~= type(b) then
+		return false
+	end
+	if type(a) ~= "table" then
+		return a == b
+	end
 	for k, v in pairs(a) do
-		if not vim.deep_equal(v, b[k]) then return false end
+		if not vim.deep_equal(v, b[k]) then
+			return false
+		end
 	end
 	for k in pairs(b) do
-		if a[k] == nil then return false end
+		if a[k] == nil then
+			return false
+		end
 	end
 	return true
 end
@@ -219,7 +227,7 @@ end
 _G.debug = {
 	getinfo = function(level, what)
 		return {
-			source = "@/test/lua/beancount/utils.lua"
+			source = "@/test/lua/beancount/utils.lua",
 		}
 	end,
 }
@@ -227,8 +235,8 @@ _G.debug = {
 -- Add lua path to find beancount modules
 vim.opt = {
 	runtimepath = {
-		prepend = function() end
-	}
+		prepend = function() end,
+	},
 }
 
 print("Running comprehensive inlay_hints tests...")
@@ -971,9 +979,9 @@ run_test("should skip empty lines when scanning for decimal position", function(
 		if start == 4 then
 			return { "  target line" }
 		elseif start == 3 then
-			return { "" }                  -- Empty line
+			return { "" } -- Empty line
 		elseif start == 2 then
-			return { "" }                  -- Empty line
+			return { "" } -- Empty line
 		elseif start == 1 then
 			return { "  Assets:Cash    50.25 USD" } -- Line with decimal
 		end
@@ -998,7 +1006,7 @@ run_test("should stop at transaction header lines", function()
 		if start == 2 then
 			return { "  target line" }
 		elseif start == 1 then
-			return { "  posting line" }    -- Indented (not a header)
+			return { "  posting line" } -- Indented (not a header)
 		elseif start == 0 then
 			return { '2024-01-01 * "Transaction"' } -- Transaction header (not indented)
 		end

@@ -2,6 +2,7 @@
 -- Tests all navigation functionality without complex test framework
 
 -- Add lua path to find beancount modules
+---@diagnostic disable-next-line: redundant-parameter
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 print("Running comprehensive navigation tests...")
@@ -55,6 +56,7 @@ local original_nvim_buf_add_highlight = vim.api.nvim_buf_add_highlight
 local original_cmd = vim.cmd
 
 -- Mock vim.cmd to avoid errors
+---@diagnostic disable-next-line: duplicate-set-field
 vim.cmd = function() end
 
 -- Mock config and diagnostics modules
@@ -87,6 +89,7 @@ run_test("should call goto_account_definition for valid account", function()
 	local nav = get_navigation()
 	local account_def_called = false
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(pattern)
 		if pattern == "<cword>" then
 			return "Assets:Checking"
@@ -94,11 +97,13 @@ run_test("should call goto_account_definition for valid account", function()
 		return pattern
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.getline = function(line)
 		return "  Assets:Checking  100.00 USD"
 	end
 
 	-- Mock the goto_account_definition function to track if it's called
+	---@diagnostic disable-next-line: duplicate-set-field
 	nav.goto_account_definition = function(account)
 		account_def_called = true
 		test_assert(account == "Assets:Checking", "should pass correct account name")
@@ -116,6 +121,7 @@ run_test("should call goto_include_file for include statement", function()
 	local nav = get_navigation()
 	local include_file_called = false
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(pattern)
 		if pattern == "<cword>" then
 			return "include"
@@ -123,11 +129,13 @@ run_test("should call goto_include_file for include statement", function()
 		return pattern
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.getline = function(line)
 		return 'include "accounts.beancount"'
 	end
 
 	-- Mock the goto_include_file function
+	---@diagnostic disable-next-line: duplicate-set-field
 	nav.goto_include_file = function(line)
 		include_file_called = true
 		test_assert(line == 'include "accounts.beancount"', "should pass correct line")
@@ -145,7 +153,7 @@ run_test("should warn for nil account in goto_account_definition", function()
 	local nav = get_navigation()
 	local notify_called = false
 	local notify_message = ""
-
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.notify = function(msg, level)
 		notify_called = true
 		notify_message = msg
@@ -163,6 +171,7 @@ run_test("should warn for empty account in goto_account_definition", function()
 	local nav = get_navigation()
 	local notify_called = false
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.notify = function(msg, level)
 		notify_called = true
 	end
@@ -233,6 +242,7 @@ run_test("should search files when account not found locally", function()
 		return {}
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.cmd = function(cmd)
 		if cmd:match("edit") then
 			test_assert(cmd:match("file1.beancount"), "should open correct file")
@@ -263,6 +273,7 @@ run_test("should warn when account not found anywhere", function()
 		return {}
 	end -- No files
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.notify = function(msg, level)
 		notify_called = true
 		notify_message = msg
@@ -283,6 +294,7 @@ run_test("should extract filename from include statement", function()
 	local open_called = false
 	local extracted_filename = ""
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	nav.open_include_file = function(filename)
 		open_called = true
 		extracted_filename = filename
@@ -298,6 +310,7 @@ run_test("should handle malformed include statements", function()
 	local nav = get_navigation()
 	local open_called = false
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	nav.open_include_file = function(filename)
 		open_called = true
 	end
@@ -311,6 +324,7 @@ run_test("should handle nil filename in open_include_file", function()
 	local nav = get_navigation()
 	local cmd_called = false
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.cmd = function()
 		cmd_called = true
 	end
@@ -327,6 +341,7 @@ run_test("should open relative include file", function()
 	local cmd_called = false
 	local edit_command = ""
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(pattern)
 		if pattern == "%:h" then
 			return "/current/dir"
@@ -338,6 +353,7 @@ run_test("should open relative include file", function()
 		return path == "/current/dir/accounts.beancount" and 1 or 0
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.cmd = function(cmd)
 		cmd_called = true
 		edit_command = cmd
@@ -357,6 +373,7 @@ run_test("should open absolute include file", function()
 	local nav = get_navigation()
 	local cmd_called = false
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(pattern)
 		return "/current/dir"
 	end
@@ -364,6 +381,7 @@ run_test("should open absolute include file", function()
 		return path == "accounts.beancount" and 1 or 0
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.cmd = function(cmd)
 		cmd_called = true
 		test_assert(cmd:match("accounts.beancount"), "should use absolute path")
@@ -382,6 +400,7 @@ run_test("should warn when include file not found", function()
 	local nav = get_navigation()
 	local notify_called = false
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function()
 		return "/current/dir"
 	end
@@ -389,6 +408,7 @@ run_test("should warn when include file not found", function()
 		return 0
 	end -- File not found
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.notify = function(msg, level)
 		notify_called = true
 		test_assert(msg:match("Include file not found"), "should show not found message")
@@ -413,6 +433,7 @@ run_test("should warn when no accounts found in list_accounts", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.notify = function(msg, level)
 		notify_called = true
 		test_assert(msg == "No accounts found", "should show no accounts message")
@@ -447,6 +468,7 @@ run_test("should populate quickfix when accounts found", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(pattern)
 		return "/test/file.beancount"
 	end
@@ -467,6 +489,7 @@ run_test("should populate quickfix when accounts found", function()
 
 	-- Mock vim.cmd to avoid triggering LazyVim config
 	local original_vim_cmd = vim.cmd
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.cmd = function() end
 
 	nav.list_accounts()
@@ -526,9 +549,11 @@ run_test("should find document links for beancount files", function()
 		return str -- Simplified for testing
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_get_current_buf = function()
 		return 1
 	end
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_buf_get_lines = function(bufnr, start, end_line, strict)
 		return {
 			'include "accounts.beancount"',
@@ -559,6 +584,7 @@ end)
 run_test("should return empty links when no includes found", function()
 	local nav = get_navigation()
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_buf_get_lines = function()
 		return {
 			"2024-01-01 open Assets:Checking",
@@ -579,13 +605,16 @@ run_test("should update and highlight document links", function()
 	local highlight_called = false
 	local highlights = {}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_get_current_buf = function()
 		return 1
 	end
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_buf_get_lines = function()
 		return { 'include "test.beancount"' }
 	end
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_buf_clear_namespace = function(bufnr, ns_id, start, end_line)
 		clear_called = true
 		test_assert(bufnr == 1, "should clear correct buffer")
@@ -628,6 +657,7 @@ run_test("should handle document link clicks", function()
 		},
 	}
 
+---@diagnostic disable-next-line: duplicate-set-field
 	nav.open_include_file = function(filename)
 		open_called = true
 		opened_file = filename
@@ -654,6 +684,7 @@ run_test("should not handle clicks outside link range", function()
 		},
 	}
 
+---@diagnostic disable-next-line: duplicate-set-field
 	nav.open_include_file = function()
 		open_called = true
 	end
@@ -694,6 +725,7 @@ run_test("should handle special characters in filenames", function()
 		return str -- Simplified for testing
 	end
 
+---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_buf_get_lines = function()
 		return {
 			'include "file with spaces.beancount"',
@@ -746,6 +778,7 @@ run_test("should handle complex navigation workflow", function()
 	local operations = {}
 
 	-- Mock all required functions
+---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(pattern)
 		if pattern == "<cword>" then
 			return "Assets:Checking"
@@ -756,6 +789,7 @@ run_test("should handle complex navigation workflow", function()
 		return pattern
 	end
 
+---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.getline = function()
 		return "  Assets:Checking  100.00 USD"
 	end
@@ -770,6 +804,7 @@ run_test("should handle complex navigation workflow", function()
 		table.insert(operations, "readfile:" .. file)
 		return { "2024-01-01 open Assets:Checking" }
 	end
+---@diagnostic disable-next-line: duplicate-set-field
 	vim.cmd = function(cmd)
 		table.insert(operations, "cmd:" .. cmd)
 	end
@@ -822,6 +857,7 @@ run_test("should handle JSON parsing errors gracefully", function()
 		end,
 	}
 
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.notify = function(msg, level)
 		notify_called = true
 	end

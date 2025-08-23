@@ -2,6 +2,7 @@
 -- Tests all folding functionality without complex test framework
 
 -- Add lua path to find beancount modules
+---@diagnostic disable-next-line: redundant-parameter
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 print("Running comprehensive fold tests...")
@@ -39,7 +40,8 @@ local original_v_lnum = vim.v.lnum
 
 -- Mock vim.fn.getline and vim.v.lnum for testing
 local function mock_fold_context(line_content, line_number)
-	vim.fn.getline = function(lnum)
+	---@diagnostic disable-next-line: duplicate-set-field
+	vim.fn.getline = function(_)
 		return line_content
 	end
 	vim.v = vim.v or {}

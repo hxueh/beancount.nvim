@@ -2,6 +2,7 @@
 -- Tests all symbol parsing functionality without complex test framework
 
 -- Add lua path to find beancount modules
+---@diagnostic disable-next-line: redundant-parameter
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 print("Running comprehensive symbols tests...")
@@ -269,10 +270,13 @@ run_test("should get document symbols from buffer", function()
 	local symbols = get_symbols()
 
 	-- Mock buffer functions
+
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_get_current_buf = function()
 		return 1
 	end
-	vim.api.nvim_buf_get_lines = function(bufnr, start, end_line, strict)
+	---@diagnostic disable-next-line: duplicate-set-field
+	vim.api.nvim_buf_get_lines = function(_, _, _, _)
 		return {
 			'2024-01-01 * "Store" "Purchase"',
 			"",
@@ -300,10 +304,12 @@ run_test("should handle empty buffer", function()
 	local symbols = get_symbols()
 
 	-- Mock empty buffer
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_get_current_buf = function()
 		return 1
 	end
-	vim.api.nvim_buf_get_lines = function(bufnr, start, end_line, strict)
+	---@diagnostic disable-next-line: duplicate-set-field
+	vim.api.nvim_buf_get_lines = function(_, _, _, _)
 		return {}
 	end
 

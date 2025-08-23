@@ -2,6 +2,7 @@
 -- Tests all major functionality without complex test framework
 
 -- Add lua path to find beancount modules
+---@diagnostic disable-next-line: redundant-parameter
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 print("Running comprehensive config tests...")
@@ -184,7 +185,8 @@ run_test("should handle validation gracefully", function()
 	-- Mock vim.notify to capture warnings
 	local notify_called = false
 	local old_notify = vim.notify
-	vim.notify = function(msg, level)
+	---@diagnostic disable-next-line: duplicate-set-field
+	vim.notify = function(_, _)
 		notify_called = true
 	end
 
