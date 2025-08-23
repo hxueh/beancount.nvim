@@ -70,6 +70,7 @@ vim.tbl_contains = function(tbl, value)
 	return false
 end
 
+---@diagnostic disable-next-line: duplicate-set-field
 vim.startswith = function(str, prefix)
 	return string.sub(str, 1, string.len(prefix)) == prefix
 end
@@ -88,7 +89,7 @@ vim.defer_fn = function(fn, delay)
 	fn() -- Execute immediately for tests
 end
 
-vim.cmd = function(cmd)
+vim.cmd = function(_)
 	-- Silent for tests
 end
 
@@ -375,6 +376,7 @@ local function get_inlay_hints()
 
 		vim.api.nvim_buf_clear_namespace(bufnr, M.namespace, 0, -1)
 
+		---@diagnostic disable-next-line: param-type-mismatch
 		for line_str, units in pairs(file_automatics) do
 			local line_num = tonumber(line_str) - 1
 
@@ -1034,9 +1036,9 @@ print("Tests passed: " .. tests_passed)
 print("Tests failed: " .. (tests_run - tests_passed))
 
 if tests_passed == tests_run then
-	print("\n✓ All tests passed!")
+	print("\n✓ All tests passed!\n")
 	os.exit(0)
 else
-	print("\n✗ Some tests failed!")
+	print("\n✗ Some tests failed!\n")
 	os.exit(1)
 end

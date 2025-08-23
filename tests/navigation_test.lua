@@ -657,7 +657,7 @@ run_test("should handle document link clicks", function()
 		},
 	}
 
----@diagnostic disable-next-line: duplicate-set-field
+	---@diagnostic disable-next-line: duplicate-set-field
 	nav.open_include_file = function(filename)
 		open_called = true
 		opened_file = filename
@@ -684,7 +684,7 @@ run_test("should not handle clicks outside link range", function()
 		},
 	}
 
----@diagnostic disable-next-line: duplicate-set-field
+	---@diagnostic disable-next-line: duplicate-set-field
 	nav.open_include_file = function()
 		open_called = true
 	end
@@ -725,7 +725,7 @@ run_test("should handle special characters in filenames", function()
 		return str -- Simplified for testing
 	end
 
----@diagnostic disable-next-line: duplicate-set-field
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.api.nvim_buf_get_lines = function()
 		return {
 			'include "file with spaces.beancount"',
@@ -778,7 +778,7 @@ run_test("should handle complex navigation workflow", function()
 	local operations = {}
 
 	-- Mock all required functions
----@diagnostic disable-next-line: duplicate-set-field
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.expand = function(pattern)
 		if pattern == "<cword>" then
 			return "Assets:Checking"
@@ -789,7 +789,7 @@ run_test("should handle complex navigation workflow", function()
 		return pattern
 	end
 
----@diagnostic disable-next-line: duplicate-set-field
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.fn.getline = function()
 		return "  Assets:Checking  100.00 USD"
 	end
@@ -804,7 +804,7 @@ run_test("should handle complex navigation workflow", function()
 		table.insert(operations, "readfile:" .. file)
 		return { "2024-01-01 open Assets:Checking" }
 	end
----@diagnostic disable-next-line: duplicate-set-field
+	---@diagnostic disable-next-line: duplicate-set-field
 	vim.cmd = function(cmd)
 		table.insert(operations, "cmd:" .. cmd)
 	end
@@ -875,9 +875,9 @@ print("Tests passed: " .. tests_passed)
 print("Tests failed: " .. (tests_run - tests_passed))
 
 if tests_passed == tests_run then
-	print("\n✓ All tests passed!")
+	print("\n✓ All tests passed!\n")
 	vim.cmd("quit")
 else
-	print("\n✗ Some tests failed!")
+	print("\n✗ Some tests failed!\n")
 	vim.cmd("cquit 1")
 end

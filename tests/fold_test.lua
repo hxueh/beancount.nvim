@@ -1067,9 +1067,9 @@ print("Tests passed: " .. tests_passed)
 print("Tests failed: " .. (tests_run - tests_passed))
 
 if tests_passed == tests_run then
-	print("\n✓ All tests passed!")
+	print("\n✓ All tests passed!\n")
 	vim.cmd("quit")
 else
-	print("\n✗ Some tests failed!")
+	print("\n✗ Some tests failed!\n")
 	vim.cmd("cquit 1")
 end

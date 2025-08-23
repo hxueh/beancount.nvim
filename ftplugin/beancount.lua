@@ -12,9 +12,9 @@ vim.bo.comments = "b:;;"
 
 -- Set indentation options
 vim.bo.expandtab = true
-vim.bo.shiftwidth = 2
-vim.bo.tabstop = 2
-vim.bo.softtabstop = 2
+vim.bo.shiftwidth = 4
+vim.bo.tabstop = 4
+vim.bo.softtabstop = 4
 
 -- Set folding options
 vim.wo.foldmethod = "expr"
