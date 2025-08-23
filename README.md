@@ -2,6 +2,10 @@
 
 A comprehensive Neovim plugin for [Beancount](https://beancount.github.io/) plain text accounting, ported from the popular VSCode extension.
 
+## CI Status Badges
+
+[![CI](https://github.com/hxueh/beancount.nvim/workflows/CI/badge.svg)](https://github.com/hxueh/beancount.nvim/actions)
+
 ## Features
 
 - 🎯 **Syntax Highlighting** - Full Beancount syntax support with proper highlighting
