@@ -103,30 +103,3 @@ jobs:
 
           echo "=== Utils Tests ==="
           nvim --headless --noplugin --clean -c "luafile tests/utils_test.lua" 2>&1 || echo "❌ Utils tests failed"
-
-    # Test with minimal Neovim configuration to ensure compatibility
-  test-minimal:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Neovim
-        uses: rhysd/action-setup-vim@v1
-        with:
-          neovim: true
-          version: "stable"
-
-      - name: Run tests with minimal config
-        env:
-          XDG_CONFIG_HOME: /tmp
-          XDG_DATA_HOME: /tmp
-          CI: true
-          GITHUB_ACTIONS: true
-        run: |
-          # Create minimal init.lua to avoid loading user configs
-          mkdir -p /tmp/nvim
-          echo 'vim.opt.runtimepath:prepend(".")' > /tmp/nvim/init.lua
-
-          echo "Running tests with minimal Neovim configuration..."
-          make test

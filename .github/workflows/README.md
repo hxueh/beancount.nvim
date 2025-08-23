@@ -4,13 +4,6 @@ This directory contains the CI/CD workflows for beancount.nvim.
 
 ## Workflows
 
-### 🚀 Quick Tests (`test-quick.yml`)
-
-- **Trigger**: Push/PR to `main` branch
-- **Purpose**: Fast feedback for essential functionality
-- **Runtime**: ~2-3 minutes
-- **Matrix**: Neovim stable only
-
 ### 🧪 Full CI Pipeline (`ci.yml`)
 
 - **Trigger**: Push/PR to `main` or `develop` branches
@@ -20,13 +13,6 @@ This directory contains the CI/CD workflows for beancount.nvim.
   - **Lint Job**: Luacheck static analysis + StyLua formatting checks
   - **Test Job**: Unit tests on Neovim stable + nightly
   - **Test Minimal**: Tests with minimal Neovim configuration
-
-### 📋 Test Suite (`test.yml`)
-
-- **Trigger**: Push/PR to `main` or `develop` branches
-- **Purpose**: Focused unit testing across Neovim versions
-- **Matrix**: Neovim stable + nightly
-- **Features**: Individual test module debugging on failure
 
 ## CI Status Badges
 
