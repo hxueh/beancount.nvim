@@ -90,15 +90,13 @@ require("beancount").setup({
 
   -- Diagnostics & warnings
   flag_warnings = {             -- Transaction flag warning levels
-    ["*"] = nil,                           -- Cleared (no warning)
-    ["!"] = vim.diagnostic.severity.WARN, -- Incomplete (warning)
-    ["P"] = nil,                           -- Pending
-    ["S"] = nil,                           -- Statement
-    ["T"] = nil,                           -- Transfer
-    ["C"] = nil,                           -- Conversion
-    ["U"] = nil,                           -- Update
-    ["R"] = nil,                           -- Return
-    ["M"] = nil,                           -- Merge
+    ["*"] = nil,                           -- FLAG_OKAY - Transactions that have been checked
+    ["!"] = vim.diagnostic.severity.WARN, -- FLAG_WARNING - Mark by user as something to be looked at later
+    ["P"] = nil,                           -- FLAG_PADDING - Transactions created from padding directives
+    ["S"] = nil,                           -- FLAG_SUMMARIZE - Transactions created due to summarization
+    ["T"] = nil,                           -- FLAG_TRANSFER - Transactions created due to balance transfers
+    ["C"] = nil,                           -- FLAG_CONVERSIONS - Transactions created to account for price conversions
+    ["M"] = nil,                           -- FLAG_MERGING - A flag to mark postings merging together legs for average cost
   },
   auto_save_before_check = true, -- Auto-save before diagnostics
 

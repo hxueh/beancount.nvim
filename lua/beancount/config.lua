@@ -20,16 +20,22 @@ local defaults = {
 	python_path = "python",
 
 	-- Configuration for diagnostic warnings based on transaction flags
+	-- Special flags:
+	-- "*" = FLAG_OKAY - Transactions that have been checked
+	-- "!" = FLAG_WARNING - Mark by the user as something to be looked at later on
+	-- "P" = FLAG_PADDING - Transactions created from padding directives
+	-- "S" = FLAG_SUMMARIZE - Transactions created due to summarization
+	-- "T" = FLAG_TRANSFER - Transactions created due to balance transfers
+	-- "C" = FLAG_CONVERSIONS - Transactions created to account for price conversions
+	-- "M" = FLAG_MERGING - A flag to mark postings merging together legs for average cost
 	flag_warnings = {
-		["*"] = nil,
-		["!"] = vim.diagnostic.severity.WARN,
-		["P"] = nil,
-		["S"] = nil,
-		["T"] = nil,
-		["C"] = nil,
-		["U"] = nil,
-		["R"] = nil,
-		["M"] = nil,
+		["*"] = nil, -- FLAG_OKAY
+		["!"] = vim.diagnostic.severity.WARN, -- FLAG_WARNING
+		["P"] = nil, -- FLAG_PADDING
+		["S"] = nil, -- FLAG_SUMMARIZE
+		["T"] = nil, -- FLAG_TRANSFER
+		["C"] = nil, -- FLAG_CONVERSIONS
+		["M"] = nil, -- FLAG_MERGING
 	},
 
 	-- Feature toggles for various beancount capabilities
