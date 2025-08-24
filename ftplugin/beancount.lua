@@ -2,7 +2,7 @@
 
 -- Only load once
 if vim.b.did_ftplugin then
-	return
+  return
 end
 vim.b.did_ftplugin = 1
 
@@ -32,9 +32,9 @@ local keymaps = config.get("keymaps") or {}
 
 -- Formatting commands
 if keymaps.format_transaction then
-	vim.keymap.set("n", keymaps.format_transaction, function()
-		require("beancount.formatter").format_transaction()
-	end, vim.tbl_extend("force", opts, { desc = "Format current transaction" }))
+  vim.keymap.set("n", keymaps.format_transaction, function()
+    require("beancount.formatter").format_transaction()
+  end, vim.tbl_extend("force", opts, { desc = "Format current transaction" }))
 end
 
 -- Completion mappings
@@ -42,21 +42,21 @@ vim.keymap.set("i", "<C-x><C-o>", "<C-x><C-o>", opts)
 
 -- Navigation commands
 if keymaps.goto_definition then
-	vim.keymap.set("n", keymaps.goto_definition, function()
-		require("beancount.navigation").goto_definition()
-	end, vim.tbl_extend("force", opts, { desc = "Go to definition" }))
+  vim.keymap.set("n", keymaps.goto_definition, function()
+    require("beancount.navigation").goto_definition()
+  end, vim.tbl_extend("force", opts, { desc = "Go to definition" }))
 end
 
 if keymaps.next_transaction then
-	vim.keymap.set("n", keymaps.next_transaction, function()
-		require("beancount.navigation").next_transaction()
-	end, vim.tbl_extend("force", opts, { desc = "Next transaction" }))
+  vim.keymap.set("n", keymaps.next_transaction, function()
+    require("beancount.navigation").next_transaction()
+  end, vim.tbl_extend("force", opts, { desc = "Next transaction" }))
 end
 
 if keymaps.prev_transaction then
-	vim.keymap.set("n", keymaps.prev_transaction, function()
-		require("beancount.navigation").prev_transaction()
-	end, vim.tbl_extend("force", opts, { desc = "Previous transaction" }))
+  vim.keymap.set("n", keymaps.prev_transaction, function()
+    require("beancount.navigation").prev_transaction()
+  end, vim.tbl_extend("force", opts, { desc = "Previous transaction" }))
 end
 
 -- Set up the buffer with beancount extension
