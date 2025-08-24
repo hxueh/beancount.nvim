@@ -1,0 +1,16 @@
+; Balance assertions for testing beancheck.py functionality
+; These are simplified to focus on testing rather than accuracy
+
+; Basic balance checks - using actual calculated values
+2025-08-31 balance Assets:Bank:JPM                        -11180.00 USD
+2025-08-31 balance Assets:Cash                             -267.50 USD
+2025-08-31 balance Liabilities:CreditCard:Visa             -585.00 USD
+2025-08-31 balance Income:Salary                           -3500.00 USD
+
+; Test multi-commodity balance
+2025-08-31 balance Assets:Investments:Stocks                  10 AAPL
+2025-08-31 balance Assets:Investments:Stocks                   5 GOOGL
+
+; Test zero balances
+2025-08-31 balance Assets:Bank:BofA                            0.00 USD
+2025-08-31 balance Liabilities:Bank:BofA                       0.00 USD

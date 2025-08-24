@@ -1,19 +1,50 @@
+; Plugin directives
+plugin "beancount.plugins.auto_accounts"
+
 ; Options
 option "operating_currency" "USD"
 option "operating_currency" "GBP"
 option "operating_currency" "EUR"
+option "title" "Test Beancount File"
+option "name_assets" "Assets"
+option "name_liabilities" "Liabilities"
 
-; Open Accounts
+; Open Accounts with currencies and metadata
 2025-08-01 open Expenses:Food:Lunch
+    description: "Lunch expenses"
 2025-08-01 open Expenses:Food:Dinner
-2025-08-01 open Assets:Bank:JPM
-2025-08-01 open Assets:Bank:BofA
+2025-08-01 open Expenses:Entertainment:Movies
+2025-08-01 open Expenses:Travel:Hotel
+2025-08-01 open Expenses:Business:Consulting
+2025-08-01 open Expenses:Miscellaneous
+2025-08-01 open Expenses:Testing
+2025-08-01 open Assets:Bank:JPM                           USD,EUR
+2025-08-01 open Assets:Bank:BofA                          USD
+2025-08-01 open Assets:Cash                               USD
+2025-08-01 open Assets:Investments:Stocks                 USD,EUR,AAPL,GOOGL
 2025-08-02 open Liabilities:Bank:JPM
 2025-08-02 open Liabilities:Bank:BofA
-2025-08-02 open Income:Salary
+2025-08-02 open Liabilities:CreditCard:Visa               USD
+2025-08-02 open Income:Salary                             USD
+2025-08-02 open Income:Bonus                              USD
+2025-08-02 open Equity:Opening-Balances                  USD
 
 ; Close Accounts
 2025-08-05 close Liabilities:Bank:JPM
+
+; Balance assertions
+2025-08-01 balance Assets:Bank:JPM                        0.00 USD
+2025-08-01 balance Assets:Cash                            0.00 USD
+
+; Pad directive (commented out to avoid unused warning)
+; 2025-08-01 pad Assets:Cash Equity:Opening-Balances
+
+; Events
+2025-08-01 event "location" "New York"
+2025-08-15 event "salary-increase" "Got a raise!"
+
+; Custom directive
+2025-08-01 custom "budget" Expenses:Food:Lunch "monthly" 300.00 USD
 
 ; Ledger for 2025
 include "2025/*.beancount"

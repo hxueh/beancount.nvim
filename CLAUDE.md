@@ -14,15 +14,12 @@ make test           # Run all tests using nvim headless mode
 
 ```bash
 make lint           # Run luacheck on lua/ directory (requires luacheck)
-make format         # Format code with stylua (requires stylua)
-make format-check   # Check code formatting without changes
 make clean          # Clean up test artifacts
 ```
 
 ### Installation Requirements
 
 - `luacheck` - Lua linter: `luarocks install luacheck`
-- `stylua` - Lua formatter: Install from https://github.com/JohnnyMorganz/StyLua
 
 ## Architecture Overview
 

@@ -29,16 +29,6 @@ jobs:
         run: |
           luacheck lua/ --globals vim --std luajit --codes || true
 
-      - name: Install stylua
-        run: |
-          wget -qO- https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-x86_64.zip | funzip > stylua
-          chmod +x stylua
-          sudo mv stylua /usr/local/bin/
-
-      - name: Check formatting with stylua
-        run: |
-          stylua --check lua/ tests/ || echo "Style check failed - run 'stylua lua/ tests/' to fix"
-
   # Unit tests
   test:
     runs-on: ubuntu-latest
@@ -50,6 +40,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install beancount
 
       - name: Install Neovim
         uses: rhysd/action-setup-vim@v1
@@ -75,31 +75,3 @@ jobs:
           mkdir -p /tmp/empty
           echo "Running test suite..."
           make test
-
-      - name: Run individual test files (on failure)
-        if: failure()
-        env:
-          CI: true
-          GITHUB_ACTIONS: true
-          XDG_CONFIG_HOME: /tmp/empty
-          XDG_DATA_HOME: /tmp/empty
-        run: |
-          echo "Main test failed, running individual modules for debugging..."
-
-          echo "=== Config Tests ==="
-          nvim --headless --noplugin --clean -c "luafile tests/config_test.lua" 2>&1 || echo "❌ Config tests failed"
-
-          echo "=== Fold Tests ==="
-          nvim --headless --noplugin --clean -c "luafile tests/fold_test.lua" 2>&1 || echo "❌ Fold tests failed"
-
-          echo "=== Inlay Hints Tests ==="
-          nvim --headless --noplugin --clean -c "luafile tests/inlay_hints_test.lua" 2>&1 || echo "❌ Inlay hints tests failed"
-
-          echo "=== Navigation Tests ==="
-          nvim --headless --noplugin --clean -c "luafile tests/navigation_test.lua" 2>&1 || echo "❌ Navigation tests failed"
-
-          echo "=== Symbols Tests ==="
-          nvim --headless --noplugin --clean -c "luafile tests/symbols_test.lua" 2>&1 || echo "❌ Symbols tests failed"
-
-          echo "=== Utils Tests ==="
-          nvim --headless --noplugin --clean -c "luafile tests/utils_test.lua" 2>&1 || echo "❌ Utils tests failed"
