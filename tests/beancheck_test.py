@@ -17,14 +17,52 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+
+# Create a custom test result class to track statistics
+class TestResultCollector(unittest.TextTestResult):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.test_count: int = 0
+        self.success_count: int = 0
+        self.failure_count: int = 0
+        self.error_count: int = 0
+        self.skip_count: int = 0
+
+    def startTest(self, test: unittest.TestCase) -> None:
+        super().startTest(test)
+        self.test_count += 1
+
+    def addSuccess(self, test: unittest.TestCase) -> None:
+        super().addSuccess(test)
+        self.success_count += 1
+
+    def addError(self, test: unittest.TestCase, err: Any) -> None:
+        super().addError(test, err)
+        self.error_count += 1
+
+    def addFailure(self, test: unittest.TestCase, err: Any) -> None:
+        super().addFailure(test, err)
+        self.failure_count += 1
+
+    def addSkip(self, test: unittest.TestCase, reason: str) -> None:
+        super().addSkip(test, reason)
+        self.skip_count += 1
 
 
 class BeancheckTest(unittest.TestCase):
     """Test suite for beancheck.py functionality"""
 
+    # Class attributes
+    test_dir: Path
+    beancheck_script: Path
+    example_dir: Path
+    main_file: Path
+    python_path: str
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Set up test environment"""
         cls.test_dir = Path(__file__).parent
         cls.beancheck_script = cls.test_dir.parent / "pythonFiles" / "beancheck.py"
@@ -44,7 +82,7 @@ class BeancheckTest(unittest.TestCase):
     def find_python_executable() -> str:
         """Find appropriate Python executable"""
         # Try common virtual environment paths first
-        candidates = [sys.executable, "python3", "python"]
+        candidates: List[str] = [sys.executable, "python3", "python"]
 
         for candidate in candidates:
             try:
@@ -62,7 +100,7 @@ class BeancheckTest(unittest.TestCase):
         self, filename: str, payee_narration: bool = False
     ) -> Dict[str, Any]:
         """Run beancheck.py and return parsed JSON output"""
-        cmd = [str(self.python_path), str(self.beancheck_script), filename]
+        cmd: List[str] = [str(self.python_path), str(self.beancheck_script), filename]
         if payee_narration:
             cmd.append("--payeeNarration")
 
@@ -73,7 +111,7 @@ class BeancheckTest(unittest.TestCase):
             if result.returncode != 0:
                 self.fail(f"beancheck.py failed: {result.stderr}")
 
-            lines = result.stdout.strip().split("\n")
+            lines: List[str] = result.stdout.strip().split("\n")
             self.assertEqual(len(lines), 4, "Expected 4 JSON output lines")
 
             return {
@@ -87,9 +125,9 @@ class BeancheckTest(unittest.TestCase):
         except json.JSONDecodeError as e:
             self.fail(f"Failed to parse JSON output: {e}")
 
-    def test_basic_functionality(self):
+    def test_basic_functionality(self) -> None:
         """Test basic beancheck functionality"""
-        result = self.run_beancheck(str(self.main_file))
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
 
         # Check basic structure
         self.assertIn("errors", result)
@@ -97,7 +135,7 @@ class BeancheckTest(unittest.TestCase):
         self.assertIn("flagged", result)
         self.assertIn("automatics", result)
 
-        data = result["data"]
+        data: Dict[str, Any] = result["data"]
         self.assertIn("accounts", data)
         self.assertIn("commodities", data)
         self.assertIn("payees", data)
@@ -105,11 +143,11 @@ class BeancheckTest(unittest.TestCase):
         self.assertIn("tags", data)
         self.assertIn("links", data)
 
-    def test_account_processing(self):
+    def test_account_processing(self) -> None:
         """Test account opening/closing processing"""
-        result = self.run_beancheck(str(self.main_file))
-        data = result["data"]
-        accounts = data["accounts"]
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
+        data: Dict[str, Any] = result["data"]
+        accounts: Dict[str, Any] = data["accounts"]
 
         # Check that accounts are properly processed
         self.assertGreater(len(accounts), 0, "Should have processed accounts")
@@ -127,10 +165,14 @@ class BeancheckTest(unittest.TestCase):
             self.assertIsInstance(account_data["balance"], list)
             self.assertIsInstance(account_data["currencies"], list)
 
-    def test_payee_narration_flag(self):
+    def test_payee_narration_flag(self) -> None:
         """Test --payeeNarration flag functionality"""
-        result_without = self.run_beancheck(str(self.main_file), payee_narration=False)
-        result_with = self.run_beancheck(str(self.main_file), payee_narration=True)
+        result_without: Dict[str, Any] = self.run_beancheck(
+            str(self.main_file), payee_narration=False
+        )
+        result_with: Dict[str, Any] = self.run_beancheck(
+            str(self.main_file), payee_narration=True
+        )
 
         # Without flag, payees and narrations should be empty or minimal
         self.assertLessEqual(
@@ -141,19 +183,19 @@ class BeancheckTest(unittest.TestCase):
             len(result_with["data"]["narrations"]),
         )
 
-    def test_commodity_extraction(self):
+    def test_commodity_extraction(self) -> None:
         """Test commodity extraction"""
-        result = self.run_beancheck(str(self.main_file))
-        commodities = result["data"]["commodities"]
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
+        commodities: List[str] = result["data"]["commodities"]
 
         self.assertIsInstance(commodities, list)
         # Should contain USD at minimum
         self.assertIn("USD", commodities)
 
-    def test_flagged_entries(self):
+    def test_flagged_entries(self) -> None:
         """Test flagged entry detection"""
-        result = self.run_beancheck(str(self.main_file))
-        flagged = result["flagged"]
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
+        flagged: List[Dict[str, Any]] = result["flagged"]
 
         self.assertIsInstance(flagged, list)
         # Check structure of flagged entries
@@ -163,10 +205,10 @@ class BeancheckTest(unittest.TestCase):
             self.assertIn("message", entry)
             self.assertIn("flag", entry)
 
-    def test_automatic_postings(self):
+    def test_automatic_postings(self) -> None:
         """Test automatic posting detection"""
-        result = self.run_beancheck(str(self.main_file))
-        automatics = result["automatics"]
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
+        automatics: Dict[str, Dict[str, str]] = result["automatics"]
 
         self.assertIsInstance(automatics, dict)
         # Structure: {filename: {lineno: amount_string}}
@@ -175,10 +217,10 @@ class BeancheckTest(unittest.TestCase):
             for _, amount in line_data.items():
                 self.assertIsInstance(amount, str)
 
-    def test_tags_and_links(self):
+    def test_tags_and_links(self) -> None:
         """Test tag and link extraction"""
-        result = self.run_beancheck(str(self.main_file))
-        data = result["data"]
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
+        data: Dict[str, Any] = result["data"]
 
         self.assertIsInstance(data["tags"], list)
         self.assertIsInstance(data["links"], list)
@@ -189,7 +231,7 @@ class BeancheckTest(unittest.TestCase):
         for link in data["links"]:
             self.assertIsInstance(link, str)
 
-    def test_error_handling(self):
+    def test_error_handling(self) -> None:
         """Test error detection and reporting"""
         # Create a file with intentional errors
         with tempfile.NamedTemporaryFile(
@@ -204,11 +246,11 @@ class BeancheckTest(unittest.TestCase):
     ; Missing second posting - should cause error
 """
             )
-            error_file = f.name
+            error_file: str = f.name
 
         try:
-            result = self.run_beancheck(error_file)
-            errors = result["errors"]
+            result: Dict[str, Any] = self.run_beancheck(error_file)
+            errors: List[Dict[str, Any]] = result["errors"]
 
             self.assertIsInstance(errors, list)
             # Should detect the unbalanced transaction
@@ -217,9 +259,9 @@ class BeancheckTest(unittest.TestCase):
         finally:
             os.unlink(error_file)
 
-    def test_performance_with_large_data(self):
+    def test_performance_with_large_data(self) -> None:
         """Test performance optimizations with larger dataset"""
-        result = self.run_beancheck(str(self.main_file))
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
 
         # This test mainly ensures the script completes without hanging
         # and produces valid output structure
@@ -227,25 +269,25 @@ class BeancheckTest(unittest.TestCase):
         self.assertIn("data", result)
 
         # Verify optimized data structures work
-        data = result["data"]
+        data: Dict[str, Any] = result["data"]
         self.assertIsInstance(data["accounts"], dict)
         self.assertIsInstance(data["commodities"], list)
 
-    def test_unicode_handling(self):
+    def test_unicode_handling(self) -> None:
         """Test Unicode character handling"""
         # The complex.beancount file contains Unicode characters
-        complex_file = self.example_dir / "2025" / "complex.beancount"
+        complex_file: Path = self.example_dir / "2025" / "complex.beancount"
         if complex_file.exists():
-            result = self.run_beancheck(str(self.main_file))
+            result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
             # Should complete without encoding errors
             self.assertIsInstance(result, dict)
 
-    def test_type_safety(self):
+    def test_type_safety(self) -> None:
         """Test type safety improvements"""
-        result = self.run_beancheck(str(self.main_file))
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
 
         # Verify all expected types are correct
-        data = result["data"]
+        data: Dict[str, Any] = result["data"]
 
         # Accounts should be dict with proper structure
         self.assertIsInstance(data["accounts"], dict)
@@ -261,10 +303,10 @@ class BeancheckTest(unittest.TestCase):
         self.assertIsInstance(data["tags"], list)
         self.assertIsInstance(data["links"], list)
 
-    def test_empty_value_cleanup(self):
+    def test_empty_value_cleanup(self) -> None:
         """Test cleanup of empty/None values"""
-        result = self.run_beancheck(str(self.main_file))
-        data = result["data"]
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
+        data: Dict[str, Any] = result["data"]
 
         # Should not contain empty strings or "None" strings
         self.assertNotIn("", data["payees"])
@@ -272,33 +314,37 @@ class BeancheckTest(unittest.TestCase):
         self.assertNotIn("", data["narrations"])
         self.assertNotIn("None", data["narrations"])
 
-    def test_json_output_format(self):
+    def test_json_output_format(self) -> None:
         """Test JSON output format and compactness"""
-        _ = self.run_beancheck(str(self.main_file))
+        _: Dict[str, Any] = self.run_beancheck(str(self.main_file))
 
         # Re-run to get raw output and check JSON format
-        cmd = [str(self.python_path), str(self.beancheck_script), str(self.main_file)]
+        cmd: List[str] = [
+            str(self.python_path),
+            str(self.beancheck_script),
+            str(self.main_file),
+        ]
         raw_result = subprocess.run(
             cmd, capture_output=True, text=True, cwd=self.test_dir.parent
         )
 
-        lines = raw_result.stdout.strip().split("\n")
+        lines: List[str] = raw_result.stdout.strip().split("\n")
 
         # Check that JSON is compact (no extra spaces)
         for line in lines:
             # Compact JSON shouldn't have ": " or ", " (spaces after separators)
-            parsed = json.loads(line)  # Should parse without error
-            compact_json = json.dumps(parsed, separators=(",", ":"))
+            parsed: Any = json.loads(line)  # Should parse without error
+            compact_json: str = json.dumps(parsed, separators=(",", ":"))
             self.assertEqual(line, compact_json, "JSON should be compact format")
 
-    def test_balance_processing_optimization(self):
+    def test_balance_processing_optimization(self) -> None:
         """Test optimized balance processing"""
-        result = self.run_beancheck(str(self.main_file))
-        data = result["data"]
-        accounts = data["accounts"]
+        result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
+        data: Dict[str, Any] = result["data"]
+        accounts: Dict[str, Any] = data["accounts"]
 
         # Check that balances are properly processed
-        balance_found = False
+        balance_found: bool = False
         for account_data in accounts.values():
             if account_data["balance"]:
                 balance_found = True
@@ -317,15 +363,20 @@ class BeancheckTest(unittest.TestCase):
 class BeancheckErrorTest(unittest.TestCase):
     """Test error conditions and edge cases"""
 
+    # Class attributes
+    test_dir: Path
+    beancheck_script: Path
+    python_path: str
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.test_dir = Path(__file__).parent
         cls.beancheck_script = cls.test_dir.parent / "pythonFiles" / "beancheck.py"
         cls.python_path = BeancheckTest.find_python_executable()
 
-    def test_missing_file(self):
+    def test_missing_file(self) -> None:
         """Test handling of missing input file"""
-        cmd = [
+        cmd: List[str] = [
             str(self.python_path),
             str(self.beancheck_script),
             "nonexistent.beancount",
@@ -334,7 +385,7 @@ class BeancheckErrorTest(unittest.TestCase):
         # beancount library handles missing files gracefully, so check stderr instead
         if result.returncode == 0:
             # If it succeeds, it should produce valid JSON output
-            lines = result.stdout.strip().split("\n")
+            lines: List[str] = result.stdout.strip().split("\n")
             self.assertEqual(
                 len(lines),
                 4,
@@ -343,23 +394,27 @@ class BeancheckErrorTest(unittest.TestCase):
         else:
             self.assertNotEqual(result.returncode, 0, "Should fail with missing file")
 
-    def test_invalid_beancount_syntax(self):
+    def test_invalid_beancount_syntax(self) -> None:
         """Test handling of invalid beancount syntax"""
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".beancount", delete=False
         ) as f:
             f.write("invalid beancount syntax here")
-            invalid_file = f.name
+            invalid_file: str = f.name
 
         try:
-            cmd = [str(self.python_path), str(self.beancheck_script), invalid_file]
+            cmd: List[str] = [
+                str(self.python_path),
+                str(self.beancheck_script),
+                invalid_file,
+            ]
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             # Should still produce output (errors in first line)
             if result.returncode == 0:
-                lines = result.stdout.strip().split("\n")
+                lines: List[str] = result.stdout.strip().split("\n")
                 self.assertEqual(len(lines), 4)
-                errors = json.loads(lines[0])
+                errors: List[Dict[str, Any]] = json.loads(lines[0])
                 self.assertIsInstance(errors, list)
 
         finally:
@@ -367,5 +422,27 @@ class BeancheckErrorTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # Set up test discovery and running
-    unittest.main(verbosity=2)
+    # Create test runner with custom result class
+    runner: unittest.TextTestRunner = unittest.TextTestRunner(
+        verbosity=2, resultclass=TestResultCollector, stream=sys.stdout
+    )
+
+    # Discover and run tests
+    loader: unittest.TestLoader = unittest.TestLoader()
+    suite: unittest.TestSuite = loader.loadTestsFromModule(sys.modules[__name__])
+    result: TestResultCollector = runner.run(suite)  # type: ignore
+
+    # Print summary in consistent format with Lua tests
+    print("\nTest Summary:")
+    print(f"Tests run: {result.test_count}")
+    print(f"Tests passed: {result.success_count}")
+    print(f"Tests failed: {result.failure_count + result.error_count}")
+    if result.skip_count > 0:
+        print(f"Tests skipped: {result.skip_count}")
+
+    if result.failure_count == 0 and result.error_count == 0:
+        print("✓ All tests passed!\n")
+        sys.exit(0)
+    else:
+        print("✗ Some tests failed!\n")
+        sys.exit(1)

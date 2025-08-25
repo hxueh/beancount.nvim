@@ -391,16 +391,9 @@ M.get_account_completions = function(prefix)
         table.insert(description, "Closed: " .. details.close)
       end
 
-      -- For insertText, if prefix ends with colon, only insert the part after the last colon
+      -- For insertText, determine what should replace the current word
+      -- The word boundary includes the entire typed prefix, so we insert the full account
       local insertText = account
-      if prefix:match(":$") then
-        local base_prefix = prefix:sub(1, -2)
-        if account:lower():find("^" .. vim.pesc(base_prefix:lower()) .. ":") then
-          -- Extract the part after the matched prefix
-          local suffix = account:sub(#base_prefix + 2) -- +2 to skip the ":"
-          insertText = suffix
-        end
-      end
 
       table.insert(items, {
         label = account,

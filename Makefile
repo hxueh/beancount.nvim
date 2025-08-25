@@ -19,8 +19,10 @@ test:
 	@nvim --headless --noplugin --clean -c "luafile tests/navigation_test.lua"
 	@nvim --headless --noplugin --clean -c "luafile tests/symbols_test.lua"
 	@nvim --headless --noplugin --clean -c "luafile tests/utils_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/completion_blink_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/completion_test.lua"
 	@echo "Running Python tests..."
-	@python3 -m unittest tests/beancheck_test.py -v 2>/dev/null || echo "Python unittest not available or tests failed. Install with: pip install beancount"
+	@python3 -m unittest tests/beancheck_test.py || echo "Python unittest not available or tests failed. Install with: pip install beancount"
 
 # Run linter
 lint:
