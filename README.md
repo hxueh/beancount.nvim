@@ -167,6 +167,35 @@ The plugin includes snippets for all Beancount directives:
 - `option` - Plugin option
 - And many more...
 
+### Inlay Hints (Automatic Posting Detection)
+
+The plugin shows **inlay hints** for automatically calculated posting amounts. These hints appear when:
+
+- **Incomplete transactions**: When postings don't sum to zero and beancount can infer the missing amount
+- **Complex transactions**: Transactions with more than 2 postings OR multiple currencies
+- **Configuration enabled**: `inlay_hints = true` in your config
+
+**Examples:**
+
+Shows hints (complex transaction):
+
+```beancount
+2023-01-01 * "Grocery shopping"
+  Assets:Checking      -50.00 USD
+  Expenses:Food         30.00 USD
+  Expenses:Household              ; <- hint shows: 20.00 USD
+```
+
+No hints (simple 2-posting transaction):
+
+```beancount
+2023-01-01 * "Simple transfer"
+  Assets:Checking      -100.00 USD
+  Assets:Savings                  ; <- no hint (obvious: +100.00 USD)
+```
+
+Hints update automatically when you save the file or when diagnostics run.
+
 ## File Structure
 
 The plugin follows standard Neovim conventions:
