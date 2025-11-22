@@ -155,6 +155,27 @@ The plugin will automatically set up blink.cmp integration including trigger cha
 - `]]` - Next transaction
 - `[[` - Previous transaction
 
+### Folding
+
+The plugin provides intelligent code folding for Beancount files. All multi-line constructs automatically fold to their first line for better readability:
+
+**Supported directives:**
+
+- **Transactions** (`*`, `!`) - Fold to show only date, flag, payee, and narration
+- **Account directives** (`open`, `close`, `balance`, `pad`) - Fold metadata and postings
+- **Information directives** (`document`, `note`, `event`, `query`, `custom`, `price`) - Fold multi-line content
+- **Configuration** (`plugin`, `option`, `include`) - Fold directive blocks
+
+**Example:**
+
+```beancount
+2025-10-10 * "Apple" "iPhone"          ; <- Folded view shows only this line
+    Expenses:Phone     1000.00 USD     ; <- Hidden when folded
+    Assets:Wallet     -1000.00 USD     ; <- Hidden when folded
+```
+
+Use Neovim's standard folding commands: `zo` (open), `zc` (close), `za` (toggle), `zM` (close all), `zR` (open all).
+
 ### Snippets
 
 The plugin includes snippets for all Beancount directives:

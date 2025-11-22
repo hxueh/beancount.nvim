@@ -551,27 +551,27 @@ run_test("should handle stress test with mixed patterns", function()
   local fold = get_fold()
 
   local test_lines = {
-    { '2024-01-01 * "Transaction"', ">1" },
-    { "  Assets:Checking  100.00 USD", "=" },
-    { "  Expenses:Food", "=" },
-    { "", "0" },
-    { "2024-01-02 open Assets:Savings", ">1" },
-    { "", "0" },
-    { 'plugin "auto_accounts"', ">1" },
-    { "", "0" },
-    { 'option "title" "My Ledger"', ">1" },
-    { "", "0" },
+    { '2024-01-01 * "Transaction"',                     ">1" },
+    { "  Assets:Checking  100.00 USD",                  "=" },
+    { "  Expenses:Food",                                "=" },
+    { "",                                               "0" },
+    { "2024-01-02 open Assets:Savings",                 ">1" },
+    { "",                                               "0" },
+    { 'plugin "auto_accounts"',                         ">1" },
+    { "",                                               "0" },
+    { 'option "title" "My Ledger"',                     ">1" },
+    { "",                                               "0" },
     { "2024-01-03 balance Assets:Checking 1000.00 USD", ">1" },
-    { "", "0" },
-    { "2024-01-04 pad Assets:Checking Equity:Opening", ">1" },
-    { "", "0" },
-    { "2024-01-05 close Assets:Old", ">1" },
-    { "", "0" },
-    { '2024-01-06 ! "Pending"', ">1" },
-    { "  Assets:Checking", "=" },
-    { '    metadata: "value"', "=" },
-    { "  Expenses:Unknown", "=" },
-    { "", "0" },
+    { "",                                               "0" },
+    { "2024-01-04 pad Assets:Checking Equity:Opening",  ">1" },
+    { "",                                               "0" },
+    { "2024-01-05 close Assets:Old",                    ">1" },
+    { "",                                               "0" },
+    { '2024-01-06 ! "Pending"',                         ">1" },
+    { "  Assets:Checking",                              "=" },
+    { '    metadata: "value"',                          "=" },
+    { "  Expenses:Unknown",                             "=" },
+    { "",                                               "0" },
   }
 
   for i, line_data in ipairs(test_lines) do
@@ -597,10 +597,10 @@ run_test("should not match invalid patterns", function()
     '2024/01/01 * "Wrong separator"',
     '2024-01-01* "No space before flag"',
     '2024-01-01 & "Invalid flag"',
-    "2024-01-01 opne Assets:Bank", -- typo
+    "2024-01-01 opne Assets:Bank",   -- typo
     "2024-01-01  oopen Assets:Bank", -- double o
-    'PLUGIN "test"', -- wrong case
-    'OPTION "test" "value"', -- wrong case
+    'PLUGIN "test"',                 -- wrong case
+    'OPTION "test" "value"',         -- wrong case
   }
 
   for i, pattern in ipairs(invalid_patterns) do
@@ -644,27 +644,59 @@ run_test("should handle advanced directive edge cases", function()
   -- Document directive
   mock_fold_context('2024-01-01 document Assets:Bank "/path/to/statement.pdf"', 1)
   local result1 = fold.foldexpr()
-  test_assert(result1 == "=", "document directive should not start fold (not in current patterns)")
+  test_assert(result1 == ">1", "document directive should start fold")
 
   -- Note directive
   mock_fold_context('2024-01-01 note Assets:Bank "Account opened"', 2)
   local result2 = fold.foldexpr()
-  test_assert(result2 == "=", "note directive should not start fold (not in current patterns)")
+  test_assert(result2 == ">1", "note directive should start fold")
 
   -- Event directive
   mock_fold_context('2024-01-01 event "location" "New York"', 3)
   local result3 = fold.foldexpr()
-  test_assert(result3 == "=", "event directive should not start fold (not in current patterns)")
+  test_assert(result3 == ">1", "event directive should start fold")
 
   -- Query directive
   mock_fold_context('2024-01-01 query "cash" "SELECT account WHERE account ~ \'Cash\'"', 4)
   local result4 = fold.foldexpr()
-  test_assert(result4 == "=", "query directive should not start fold (not in current patterns)")
+  test_assert(result4 == ">1", "query directive should start fold")
 
   -- Custom directive
   mock_fold_context('2024-01-01 custom "budget" Assets:Checking 1000.00 USD', 5)
   local result5 = fold.foldexpr()
-  test_assert(result5 == "=", "custom directive should not start fold (not in current patterns)")
+  test_assert(result5 == ">1", "custom directive should start fold")
+
+  restore_vim_functions()
+end)
+
+-- Test 46: Price and include directives
+run_test("should handle price and include directives", function()
+  local fold = get_fold()
+
+  -- Price directive
+  mock_fold_context("2024-01-01 price AAPL 152.50 USD", 1)
+  local result1 = fold.foldexpr()
+  test_assert(result1 == ">1", "price directive should start fold")
+
+  -- Price directive with different currency
+  mock_fold_context("2024-01-01 price EUR 1.08 USD", 2)
+  local result2 = fold.foldexpr()
+  test_assert(result2 == ">1", "price directive with different currency should start fold")
+
+  -- Include directive
+  mock_fold_context('include "accounts.beancount"', 3)
+  local result3 = fold.foldexpr()
+  test_assert(result3 == ">1", "include directive should start fold")
+
+  -- Include directive with path
+  mock_fold_context("include 'path/to/other.bean'", 4)
+  local result4 = fold.foldexpr()
+  test_assert(result4 == ">1", "include directive with path should start fold")
+
+  -- Price directive ending at line end
+  mock_fold_context("2024-01-01 price", 5)
+  local result5 = fold.foldexpr()
+  test_assert(result5 == ">1", "price directive at line end should start fold")
 
   restore_vim_functions()
 end)
@@ -978,25 +1010,25 @@ run_test("should handle nested structure simulation", function()
 
   -- Simulate a complete beancount file section
   local file_section = {
-    { 'plugin "beancount.plugins.auto_accounts"', ">1" },
-    { "", "0" },
-    { 'option "title" "My Ledger"', ">1" },
-    { 'option "operating_currency" "USD"', ">1" },
-    { "", "0" },
-    { "2024-01-01 open Assets:Checking", ">1" },
-    { "", "0" },
-    { '2024-01-01 * "Opening balance"', ">1" },
-    { "  Assets:Checking  1000.00 USD", "=" },
-    { "  Equity:Opening-Balances", "=" },
-    { "", "0" },
-    { '2024-01-15 * "Grocery shopping"', ">1" },
-    { "  Assets:Checking  -85.42 USD", "=" },
-    { "  Expenses:Food:Groceries", "=" },
-    { '    receipt: "receipt-001.pdf"', "=" },
-    { '    store: "Whole Foods"', "=" },
-    { "", "0" },
+    { 'plugin "beancount.plugins.auto_accounts"',      ">1" },
+    { "",                                              "0" },
+    { 'option "title" "My Ledger"',                    ">1" },
+    { 'option "operating_currency" "USD"',             ">1" },
+    { "",                                              "0" },
+    { "2024-01-01 open Assets:Checking",               ">1" },
+    { "",                                              "0" },
+    { '2024-01-01 * "Opening balance"',                ">1" },
+    { "  Assets:Checking  1000.00 USD",                "=" },
+    { "  Equity:Opening-Balances",                     "=" },
+    { "",                                              "0" },
+    { '2024-01-15 * "Grocery shopping"',               ">1" },
+    { "  Assets:Checking  -85.42 USD",                 "=" },
+    { "  Expenses:Food:Groceries",                     "=" },
+    { '    receipt: "receipt-001.pdf"',                "=" },
+    { '    store: "Whole Foods"',                      "=" },
+    { "",                                              "0" },
     { "2024-01-31 balance Assets:Checking 914.58 USD", ">1" },
-    { "", "0" },
+    { "",                                              "0" },
   }
 
   for i, line_data in ipairs(file_section) do
