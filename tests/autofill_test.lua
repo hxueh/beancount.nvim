@@ -159,12 +159,28 @@ run_test("should auto-fill on save (end-to-end)", function()
     local source_content = vim.fn.readfile(source_file)
     vim.fn.writefile(source_content, test_file)
 
+    -- Determine Python path (check for venv first, fallback to system python)
+    local python_path = "python3"
+    if vim.fn.executable(".venv/bin/python") == 1 then
+        python_path = ".venv/bin/python"
+    elseif vim.fn.executable("python") == 1 then
+        python_path = "python"
+    end
+
+    -- Verify beancount is installed
+    local check_beancount = vim.fn.system(python_path .. " -c 'import beancount' 2>&1")
+    if vim.v.shell_error ~= 0 then
+        print("  ⚠ Skipping integration test: beancount not installed for " .. python_path)
+        tests_run = tests_run - 1  -- Don't count this as a failed test
+        return
+    end
+
     -- Setup the plugin
     local beancount = require("beancount")
     beancount.setup({
         auto_fill_amounts = true,
         auto_format_on_save = false,
-        python_path = ".venv/bin/python"
+        python_path = python_path
     })
 
     -- Open the file in a buffer
