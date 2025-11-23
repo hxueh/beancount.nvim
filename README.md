@@ -12,6 +12,7 @@ A comprehensive Neovim plugin for [Beancount](https://beancount.github.io/) plai
 - 🔍 **Diagnostics** - Real-time error checking using Python's beancount library
 - ⚡ **Auto-completion** - Smart completion for accounts, payees, narrations, commodities, tags, and links
 - 🔧 **Auto-formatting** - Instant alignment and formatting of postings and amounts
+- ✨ **Auto-fill Amounts** - Automatically fill missing transaction amounts on save
 - 📝 **Snippets** - Comprehensive snippet collection for all Beancount directives
 - 🧭 **Navigation** - Go-to-definition, account jumping, and smart folding
 - 🎨 **Treesitter** - Modern syntax highlighting and indentation (when available)
@@ -80,6 +81,7 @@ require("beancount").setup({
   instant_alignment = true,     -- Align amounts on decimal point entry
   fixed_cjk_width = false,      -- Treat CJK characters as 2-width
   auto_format_on_save = true,   -- Auto formatting file on saving
+  auto_fill_amounts = false,    -- Auto-fill missing amounts on save (opt-in)
 
   -- Completion & input
   complete_payee_narration = true,  -- Include payees/narrations
@@ -148,6 +150,39 @@ The plugin will automatically set up blink.cmp integration including trigger cha
 - **Auto-indent**: New posting lines are automatically indented
 - **Manual formatting**: Available via lua functions (no default keymap)
 
+### Auto-fill Missing Amounts
+
+Automatically fill in missing amounts in incomplete transactions when you save a file. This feature is **opt-in** (disabled by default).
+
+**Enable in your config:**
+```lua
+require("beancount").setup({
+    auto_fill_amounts = true,
+})
+```
+
+**Example:**
+```beancount
+; Before save
+2025-10-10 * "AAPL" "Stock Purchase"
+  Assets:Stock                      100.00 AAPL {200.00 USD}
+  Expenses:Trading                  2.00 USD
+  Assets:Cash
+
+; After save - amount automatically filled
+2025-10-10 * "AAPL" "Stock Purchase"
+  Assets:Stock                      100.00 AAPL {200.00 USD}
+  Expenses:Trading                  2.00 USD
+  Assets:Cash                       -20002.00 USD
+```
+
+**Requirements:**
+- Only works when **exactly one** posting is missing an amount
+- Accounts must be properly opened
+- Works with multi-currency transactions
+
+**Note:** When `auto_fill_amounts` is enabled, inlay hints are automatically disabled to avoid showing redundant information since amounts are being filled directly.
+
 ### Navigation
 
 - `gd` - Go to account definition
@@ -195,6 +230,7 @@ The plugin shows **inlay hints** for automatically calculated posting amounts. T
 - **Incomplete transactions**: When postings don't sum to zero and beancount can infer the missing amount
 - **Complex transactions**: Transactions with more than 2 postings OR multiple currencies
 - **Configuration enabled**: `inlay_hints = true` in your config
+- **Auto-fill disabled**: Inlay hints are automatically disabled when `auto_fill_amounts = true` to avoid redundancy
 
 **Examples:**
 
@@ -231,6 +267,7 @@ neovim/
 │   ├── completion.lua     # Core completion functionality
 │   ├── diagnostics.lua    # Error checking and reporting
 │   ├── formatter.lua      # Text formatting and alignment
+│   ├── autofill.lua       # Auto-fill missing amounts
 │   ├── navigation.lua     # Navigation and jumping features
 │   ├── snippets.lua       # Code snippets
 │   ├── inlay_hints.lua    # Inferred amount hints

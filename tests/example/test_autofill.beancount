@@ -1,0 +1,19 @@
+; Test file for auto-fill functionality
+option "operating_currency" "USD"
+
+; Open accounts
+2025-10-01 open Assets:Stock
+2025-10-01 open Expenses:Trading
+2025-10-01 open Expenses:Food
+2025-10-01 open Assets:Cash
+
+; Test transaction 1: Stock purchase with missing cash balance
+2025-10-10 * "AAPL" "Stock Purchase"
+  Assets:Stock                      100.00 AAPL {200.00 USD}
+  Expenses:Trading                  2.00 USD
+  Assets:Cash
+
+; Test transaction 2: Simple expense with missing account balance
+2025-10-11 * "Grocery Store" "Weekly groceries"
+  Expenses:Food                     50.00 USD
+  Assets:Cash

@@ -92,6 +92,11 @@ M.render_hints = function(bufnr)
     return
   end
 
+  -- Don't show hints if auto-fill is enabled (amounts will be filled automatically)
+  if config.get("auto_fill_amounts") then
+    return
+  end
+
   local filename = vim.api.nvim_buf_get_name(bufnr)
   local file_automatics = M.automatics[filename]
 

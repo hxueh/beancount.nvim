@@ -112,14 +112,14 @@ for entry in entries:
             # Handle automatic postings more efficiently
             posting_meta: Dict[str, Any] = getattr(posting, "meta", {})
             if posting_meta and posting_meta.get("__automatic__", False):
-                # Only process if transaction is complex enough
-                if postings_count > 2 or len(txn_commodities) > 1:
-                    filename: str = str(posting_meta.get("filename", ""))
-                    lineno: int = int(posting_meta.get("lineno", 0))
-                    if units is not None:
-                        automatics[filename][lineno] = str(
-                            getattr(units, "to_string", lambda: "")()
-                        )
+                # Process all automatic postings for autofill feature
+                # Previously filtered by: postings_count > 2 or len(txn_commodities) > 1
+                filename: str = str(posting_meta.get("filename", ""))
+                lineno: int = int(posting_meta.get("lineno", 0))
+                if units is not None:
+                    automatics[filename][lineno] = str(
+                        getattr(units, "to_string", lambda: "")()
+                    )
 
         commodities.update(txn_commodities)
 

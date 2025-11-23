@@ -42,6 +42,7 @@ local defaults = {
   inlay_hints = true,
   auto_save_before_check = true,
   auto_format_on_save = true,
+  auto_fill_amounts = false,
 
   -- Configuration for code snippets and templates
   snippets = {
@@ -80,6 +81,7 @@ local validation_schema = {
   inlay_hints = { type = "boolean" },
   auto_save_before_check = { type = "boolean" },
   auto_format_on_save = { type = "boolean" },
+  auto_fill_amounts = { type = "boolean" },
 }
 
 -- Validates a single configuration key-value pair
