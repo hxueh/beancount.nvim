@@ -85,6 +85,10 @@ M.process_diagnostics = function(output)
   M.hints_data = hints_json
   local inlay_hints = require("beancount.inlay_hints")
   inlay_hints.update_data(hints_json)
+
+  -- Update autofill module with automatic posting data
+  local autofill = require("beancount.autofill")
+  autofill.update_data(hints_json)
 end
 
 -- Display validation errors in Neovim's diagnostic system
