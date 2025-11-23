@@ -181,6 +181,8 @@ require("beancount").setup({
 - Accounts must be properly opened
 - Works with multi-currency transactions
 
+**Note:** When `auto_fill_amounts` is enabled, inlay hints are automatically disabled to avoid showing redundant information since amounts are being filled directly.
+
 ### Navigation
 
 - `gd` - Go to account definition
@@ -228,6 +230,7 @@ The plugin shows **inlay hints** for automatically calculated posting amounts. T
 - **Incomplete transactions**: When postings don't sum to zero and beancount can infer the missing amount
 - **Complex transactions**: Transactions with more than 2 postings OR multiple currencies
 - **Configuration enabled**: `inlay_hints = true` in your config
+- **Auto-fill disabled**: Inlay hints are automatically disabled when `auto_fill_amounts = true` to avoid redundancy
 
 **Examples:**
 

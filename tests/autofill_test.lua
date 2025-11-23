@@ -146,6 +146,40 @@ run_test("should fill incomplete postings correctly", function()
     config.set("auto_fill_amounts", false)
 end)
 
+-- Test 6.5: Inlay hints should be disabled when autofill is enabled
+run_test("should disable inlay hints when autofill is enabled", function()
+    local inlay_hints = require("beancount.inlay_hints")
+
+    -- Enable autofill
+    config.set("auto_fill_amounts", true)
+    config.set("inlay_hints", true)
+
+    -- Create a test buffer
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+
+    -- Set up automatic posting data
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+    local hints_data = vim.json.encode({
+        [actual_filename] = {
+            ["4"] = "-100.00 USD"
+        }
+    })
+    inlay_hints.update_data(hints_data)
+
+    -- Try to render hints - should be skipped due to auto_fill_amounts
+    inlay_hints.render_hints(test_buf)
+
+    -- Check that no extmarks were created (hints were not rendered)
+    local extmarks = vim.api.nvim_buf_get_extmarks(test_buf, inlay_hints.namespace, 0, -1, {})
+    test_assert(#extmarks == 0, "Should not render hints when auto_fill_amounts is enabled")
+
+    -- Cleanup
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
 print("\n--- Integration Tests ---")
 
 -- Test 7: End-to-end integration with real beancount file
