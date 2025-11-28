@@ -60,18 +60,18 @@ run_test("should load autofill module correctly", function()
     test_assert(type(autofill.fill_buffer) == "function", "fill_buffer() should exist")
 end)
 
--- Test 2: update_data() parses JSON correctly
+-- Test 2: update_data() parses JSON correctly (new array format)
 run_test("should parse JSON data correctly", function()
     local test_json = vim.json.encode({
         ["/test/file.beancount"] = {
-            ["10"] = "-20002.00 USD",
-            ["15"] = "-50.00 USD"
+            ["10"] = { "-20002.00 USD" },
+            ["15"] = { "-50.00 USD" }
         }
     })
     autofill.update_data(test_json)
     test_assert(autofill.automatics["/test/file.beancount"] ~= nil, "Should parse file data")
-    test_assert(autofill.automatics["/test/file.beancount"]["10"] == "-20002.00 USD", "Should parse line 10")
-    test_assert(autofill.automatics["/test/file.beancount"]["15"] == "-50.00 USD", "Should parse line 15")
+    test_assert(autofill.automatics["/test/file.beancount"]["10"][1] == "-20002.00 USD", "Should parse line 10")
+    test_assert(autofill.automatics["/test/file.beancount"]["15"][1] == "-50.00 USD", "Should parse line 15")
 end)
 
 -- Test 3: update_data() handles empty input
@@ -103,7 +103,7 @@ run_test("should skip setup when feature is disabled", function()
     vim.api.nvim_buf_delete(buf, { force = true })
 end)
 
--- Test 6: fill_buffer() with test data
+-- Test 6: fill_buffer() with test data (single currency)
 run_test("should fill incomplete postings correctly", function()
     config.set("auto_fill_amounts", true)
     config.set("auto_format_on_save", false) -- Disable formatter for this test
@@ -122,10 +122,10 @@ run_test("should fill incomplete postings correctly", function()
     -- Get the actual buffer name (might be normalized)
     local actual_filename = vim.api.nvim_buf_get_name(test_buf)
 
-    -- Set up automatic posting data for this file using the actual filename
+    -- Set up automatic posting data for this file using the actual filename (new array format)
     local fill_data = vim.json.encode({
         [actual_filename] = {
-            ["4"] = "-20002.00 USD"
+            ["4"] = { "-20002.00 USD" }
         }
     })
     autofill.update_data(fill_data)
@@ -146,6 +146,51 @@ run_test("should fill incomplete postings correctly", function()
     config.set("auto_fill_amounts", false)
 end)
 
+-- Test 6a: fill_buffer() with multi-currency data
+run_test("should fill incomplete postings with multiple currencies", function()
+    config.set("auto_fill_amounts", true)
+    config.set("auto_format_on_save", false) -- Disable formatter for this test
+
+    -- Create a test buffer with multi-currency transaction
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-10 * \"Bank\" \"Interest\"",
+        "  Income:Interest                  -100.00 USD",
+        "  Income:Interest                  -50.00 GBP",
+        "  Assets:Bank"
+    })
+
+    -- Get the actual buffer name (might be normalized)
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- Set up automatic posting data with multiple currencies for line 4
+    local fill_data = vim.json.encode({
+        [actual_filename] = {
+            ["4"] = { "100.00 USD", "50.00 GBP" }
+        }
+    })
+    autofill.update_data(fill_data)
+
+    -- Verify data was loaded
+    test_assert(autofill.automatics[actual_filename] ~= nil, "Should have data for test file")
+    test_assert(#autofill.automatics[actual_filename]["4"] == 2, "Should have 2 amounts for line 4")
+
+    -- Run fill_buffer
+    autofill.fill_buffer(test_buf)
+
+    -- Check if the line was expanded to multiple lines
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    test_assert(#lines == 5, "Should have 5 lines after expansion (was 4, added 1)")
+    test_assert(lines[4]:match("Assets:Bank.*100%.00 USD") ~= nil, "Line 4 should have USD amount")
+    test_assert(lines[5]:match("Assets:Bank.*50%.00 GBP") ~= nil, "Line 5 should have GBP amount")
+
+    -- Cleanup
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
 -- Test 6.5: Inlay hints should be disabled when autofill is enabled
 run_test("should disable inlay hints when autofill is enabled", function()
     local inlay_hints = require("beancount.inlay_hints")
@@ -159,11 +204,11 @@ run_test("should disable inlay hints when autofill is enabled", function()
     local test_file = vim.fn.tempname() .. ".beancount"
     vim.api.nvim_buf_set_name(test_buf, test_file)
 
-    -- Set up automatic posting data
+    -- Set up automatic posting data (new array format)
     local actual_filename = vim.api.nvim_buf_get_name(test_buf)
     local hints_data = vim.json.encode({
         [actual_filename] = {
-            ["4"] = "-100.00 USD"
+            ["4"] = { "-100.00 USD" }
         }
     })
     inlay_hints.update_data(hints_data)

@@ -208,14 +208,16 @@ class BeancheckTest(unittest.TestCase):
     def test_automatic_postings(self) -> None:
         """Test automatic posting detection"""
         result: Dict[str, Any] = self.run_beancheck(str(self.main_file))
-        automatics: Dict[str, Dict[str, str]] = result["automatics"]
+        automatics: Dict[str, Dict[str, List[str]]] = result["automatics"]
 
         self.assertIsInstance(automatics, dict)
-        # Structure: {filename: {lineno: amount_string}}
+        # Structure: {filename: {lineno: [amount_string, ...]}}
         for _, line_data in automatics.items():
             self.assertIsInstance(line_data, dict)
-            for _, amount in line_data.items():
-                self.assertIsInstance(amount, str)
+            for _, amounts in line_data.items():
+                self.assertIsInstance(amounts, list)
+                for amount in amounts:
+                    self.assertIsInstance(amount, str)
 
     def test_tags_and_links(self) -> None:
         """Test tag and link extraction"""

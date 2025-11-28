@@ -75,11 +75,29 @@ M.fill_buffer = function(bufnr)
     local cursor_pos = vim.api.nvim_win_get_cursor(0)
     local lines_modified = 0
 
-    ---@diagnostic disable-next-line: param-type-mismatch
-    for line_str, amount in pairs(file_automatics) do
+    -- Collect all line numbers and sort them in descending order
+    -- This ensures we process from bottom to top, so line insertions don't affect
+    -- the line numbers of entries we haven't processed yet
+    local line_numbers = {}
+    for line_str, _ in pairs(file_automatics) do
         local line_num = tonumber(line_str)
+        if line_num then
+            table.insert(line_numbers, line_num)
+        end
+    end
+    table.sort(line_numbers, function(a, b)
+        return a > b
+    end)
 
-        if line_num and line_num > 0 and line_num <= vim.api.nvim_buf_line_count(bufnr) then
+    for _, line_num in ipairs(line_numbers) do
+        local amounts = file_automatics[tostring(line_num)]
+
+        -- Handle both old format (string) and new format (array) for backward compatibility
+        if type(amounts) == "string" then
+            amounts = { amounts }
+        end
+
+        if line_num > 0 and line_num <= vim.api.nvim_buf_line_count(bufnr) then
             -- Convert to 0-based indexing for nvim_buf_get_lines
             local zero_based_line = line_num - 1
             local line_text = vim.api.nvim_buf_get_lines(bufnr, zero_based_line, zero_based_line + 1, false)[1]
@@ -88,14 +106,17 @@ M.fill_buffer = function(bufnr)
                 -- Extract account name and indentation
                 local indent, account = line_text:match("^(%s+)([A-Z][a-zA-Z0-9:_-]+)")
 
-                if indent and account then
-                    -- Build new line with amount added
-                    -- Use two spaces between account and amount for basic separation
-                    local new_line = indent .. account .. "  " .. amount
+                if indent and account and #amounts > 0 then
+                    -- Build new lines for all amounts
+                    local new_lines = {}
+                    for _, amount in ipairs(amounts) do
+                        -- Use two spaces between account and amount for basic separation
+                        table.insert(new_lines, indent .. account .. "  " .. amount)
+                    end
 
-                    -- Update the line in the buffer
-                    vim.api.nvim_buf_set_lines(bufnr, zero_based_line, zero_based_line + 1, false, { new_line })
-                    lines_modified = lines_modified + 1
+                    -- Replace the original line with all new lines
+                    vim.api.nvim_buf_set_lines(bufnr, zero_based_line, zero_based_line + 1, false, new_lines)
+                    lines_modified = lines_modified + #new_lines
                 end
             end
         end
