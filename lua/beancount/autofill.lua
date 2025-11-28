@@ -36,9 +36,10 @@ end
 
 -- Fill missing amounts in a buffer using automatic posting data
 -- @param bufnr number: Buffer number to fill (defaults to current buffer)
+-- @return boolean: True if any lines were modified
 M.fill_buffer = function(bufnr)
     if not config.get("auto_fill_amounts") then
-        return
+        return false
     end
 
     bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -77,7 +78,7 @@ M.fill_buffer = function(bufnr)
     end
 
     if not file_automatics or vim.tbl_isempty(file_automatics) then
-        return
+        return false
     end
 
     -- Save cursor position to restore after filling
@@ -139,10 +140,12 @@ M.fill_buffer = function(bufnr)
         local formatter = require("beancount.formatter")
         formatter.format_buffer()
     end
+
+    return lines_modified > 0
 end
 
 -- Initialize autofill for a specific buffer
--- Sets up BufWritePre autocmd to fill amounts before saving
+-- Sets up BufWritePost autocmd to fill amounts after saving
 -- @param bufnr number: Buffer number to setup (defaults to current buffer)
 M.setup_buffer = function(bufnr)
     if not config.get("auto_fill_amounts") then
@@ -153,12 +156,16 @@ M.setup_buffer = function(bufnr)
 
     local augroup = vim.api.nvim_create_augroup("BeancountAutofill_" .. bufnr, { clear = true })
 
-    -- Fill amounts before saving (uses cached data from last check)
-    vim.api.nvim_create_autocmd("BufWritePre", {
+    -- Fill amounts after saving (beancheck reads fresh file from disk)
+    vim.api.nvim_create_autocmd("BufWritePost", {
         group = augroup,
         buffer = bufnr,
         callback = function()
-            M.fill_buffer(bufnr)
+            local modified = M.fill_buffer(bufnr)
+            -- Save again if autofill made changes
+            if modified then
+                vim.cmd("silent write")
+            end
         end,
     })
 end
