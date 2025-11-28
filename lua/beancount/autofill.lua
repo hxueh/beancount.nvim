@@ -42,6 +42,15 @@ M.fill_buffer = function(bufnr)
     end
 
     bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+    -- Run synchronous validation to get fresh automatics data
+    -- This ensures newly added transactions are detected on first save
+    local diagnostics = require("beancount.diagnostics")
+    local fresh_automatics = diagnostics.check_file_sync()
+    if fresh_automatics then
+        M.automatics = fresh_automatics
+    end
+
     local filename = vim.api.nvim_buf_get_name(bufnr)
 
     -- Try to find the file automatics data
