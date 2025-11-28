@@ -51,6 +51,53 @@ M.check_file = function()
   end)
 end
 
+-- Run beancount validation synchronously and return automatics data
+-- Used by autofill module to get fresh data before saving
+-- @return table|nil: Parsed automatics data or nil on failure
+M.check_file_sync = function()
+  local main_file = utils.get_main_bean_file()
+  if main_file == "" or not utils.file_exists(main_file) then
+    return nil
+  end
+
+  local plugin_dir = utils.get_plugin_dir()
+  local check_script = plugin_dir .. "/pythonFiles/beancheck.py"
+  local python_path = config.get("python_path")
+
+  -- Handle environment variable expansion in python_path (e.g., %PYTHON_HOME%)
+  if python_path:match("^%%") then
+    python_path = utils.resolve_env_vars(python_path)
+  end
+
+  -- Expand ~ to user home directory in python_path
+  if python_path:sub(1, 1) == "~" then
+    python_path = os.getenv("HOME") .. python_path:sub(2)
+  end
+
+  local args = { check_script, main_file }
+  if config.get("complete_payee_narration") then
+    table.insert(args, "--payeeNarration")
+  end
+
+  local stdout, exit_code = utils.run_cmd_sync(python_path, args)
+  if exit_code ~= 0 or not stdout then
+    return nil
+  end
+
+  local lines = vim.split(stdout, "\n", { plain = true })
+  if #lines < 4 then
+    return nil
+  end
+
+  local hints_json = lines[4]
+  local ok, automatics = pcall(vim.json.decode, hints_json)
+  if ok and automatics then
+    return automatics
+  end
+
+  return nil
+end
+
 -- Process the multi-line JSON output from beancheck.py
 -- @param output string: Multi-line output containing errors, completions, flags, and hints
 M.process_diagnostics = function(output)

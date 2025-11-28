@@ -40,6 +40,17 @@ M.run_cmd = function(cmd, args, callback, opts)
   return job_id
 end
 
+-- Execute a command synchronously and return the result
+-- @param cmd string: Command to execute
+-- @param args table: Command arguments
+-- @return string, number: stdout output and exit code
+M.run_cmd_sync = function(cmd, args)
+  local full_cmd = vim.list_extend({ cmd }, args)
+  local result = vim.fn.system(full_cmd)
+  local exit_code = vim.v.shell_error
+  return result, exit_code
+end
+
 -- Resolve the path to the main beancount file
 -- Falls back to current file if no main file is configured
 -- @return string: Absolute path to main beancount file or empty string

@@ -62,7 +62,7 @@ error_list: List[Dict[str, Union[str, int]]] = [
 
 # Pre-allocate data structures with better initial capacity
 accounts: Dict[str, Dict[str, Union[str, List[str]]]] = {}
-automatics: Dict[str, Dict[int, str]] = defaultdict(dict)
+automatics: Dict[str, Dict[int, List[str]]] = defaultdict(dict)
 commodities: Set[str] = set()
 flagged_entries: List[Dict[str, Union[str, int]]] = []
 
@@ -117,9 +117,10 @@ for entry in entries:
                 filename: str = str(posting_meta.get("filename", ""))
                 lineno: int = int(posting_meta.get("lineno", 0))
                 if units is not None:
-                    automatics[filename][lineno] = str(
-                        getattr(units, "to_string", lambda: "")()
-                    )
+                    amount_str: str = str(getattr(units, "to_string", lambda: "")())
+                    if lineno not in automatics[filename]:
+                        automatics[filename][lineno] = []
+                    automatics[filename][lineno].append(amount_str)
 
         commodities.update(txn_commodities)
 

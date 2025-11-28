@@ -183,6 +183,8 @@ require("beancount").setup({
 
 **Note:** When `auto_fill_amounts` is enabled, inlay hints are automatically disabled to avoid showing redundant information since amounts are being filled directly.
 
+**Performance Note:** Auto-fill runs synchronous validation on each save to ensure accurate detection of newly added transactions. For very large beancount files, this may cause a brief UI pause during save. This tradeoff ensures correct behavior when saving new transactions for the first time.
+
 ### Navigation
 
 - `gd` - Go to account definition

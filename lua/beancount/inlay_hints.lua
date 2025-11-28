@@ -108,11 +108,19 @@ M.render_hints = function(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, M.namespace, 0, -1)
 
   ---@diagnostic disable-next-line: param-type-mismatch
-  for line_str, units in pairs(file_automatics) do
+  for line_str, amounts in pairs(file_automatics) do
     local line_num = tonumber(line_str) - 1 -- Convert to 0-based
 
     if line_num >= 0 and line_num < vim.api.nvim_buf_line_count(bufnr) then
       local line_text = vim.api.nvim_buf_get_lines(bufnr, line_num, line_num + 1, false)[1] or ""
+
+      -- Handle both old format (string) and new format (array) for backward compatibility
+      local units
+      if type(amounts) == "table" then
+        units = table.concat(amounts, ", ")
+      else
+        units = amounts
+      end
 
       -- Scan previous posting lines to determine alignment position
       local dot_pos = nil
