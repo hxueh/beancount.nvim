@@ -5,6 +5,9 @@ local M = {}
 
 local config = require("beancount.config")
 
+-- Flag to prevent re-entry when triggering second save
+local is_autofilling = false
+
 -- Cache of automatic posting data from beancount validation
 -- Structure: {filename: {line_number_str: "amount string"}}
 M.automatics = {}
@@ -161,11 +164,18 @@ M.setup_buffer = function(bufnr)
         group = augroup,
         buffer = bufnr,
         callback = function()
+            -- Prevent re-entry when we trigger second save
+            if is_autofilling then
+                return
+            end
+
+            is_autofilling = true
             local modified = M.fill_buffer(bufnr)
             -- Save again if autofill made changes
             if modified then
                 vim.cmd("silent write")
             end
+            is_autofilling = false
         end,
     })
 end

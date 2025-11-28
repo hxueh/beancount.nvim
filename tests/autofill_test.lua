@@ -225,6 +225,68 @@ run_test("should disable inlay hints when autofill is enabled", function()
     config.set("auto_fill_amounts", false)
 end)
 
+-- Test 7: Re-entry guard prevents infinite loop
+run_test("should prevent re-entry during autofill", function()
+    config.set("auto_fill_amounts", true)
+    config.set("auto_format_on_save", false)
+
+    -- Create a test file first
+    local test_file = vim.fn.tempname() .. ".beancount"
+    table.insert(files_to_cleanup, test_file)
+    local content = {
+        "2025-10-10 * \"Test\" \"Transaction\"",
+        "  Assets:Bank                      100.00 USD",
+        "  Expenses:Test"
+    }
+    vim.fn.writefile(content, test_file)
+
+    -- Open the file in a real buffer (not scratch)
+    vim.cmd("edit " .. vim.fn.fnameescape(test_file))
+    local test_buf = vim.api.nvim_get_current_buf()
+
+    -- Mock the diagnostics.check_file_sync to avoid needing python
+    local diagnostics = require("beancount.diagnostics")
+    local original_check_file_sync = diagnostics.check_file_sync
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+    diagnostics.check_file_sync = function()
+        return {
+            [actual_filename] = {
+                ["3"] = { "-100.00 USD" }
+            }
+        }
+    end
+
+    -- Setup autofill for buffer (this registers the BufWritePost autocmd)
+    autofill.setup_buffer(test_buf)
+
+    -- Track how many times fill_buffer is called
+    local fill_count = 0
+    local original_fill = autofill.fill_buffer
+    autofill.fill_buffer = function(bufnr)
+        fill_count = fill_count + 1
+        -- Prevent actual infinite loop by limiting calls
+        if fill_count > 5 then
+            error("Infinite loop detected! fill_buffer called too many times")
+        end
+        return original_fill(bufnr)
+    end
+
+    -- Trigger save which should call fill_buffer once, then save again
+    -- The re-entry guard should prevent the second save from triggering fill_buffer again
+    vim.cmd("silent write")
+
+    -- Restore original functions
+    autofill.fill_buffer = original_fill
+    diagnostics.check_file_sync = original_check_file_sync
+
+    -- fill_buffer should be called exactly once (the guard prevents second call)
+    test_assert(fill_count == 1, "fill_buffer should be called exactly once, got " .. fill_count)
+
+    -- Cleanup
+    vim.cmd("bdelete!")
+    config.set("auto_fill_amounts", false)
+end)
+
 print("\n--- Integration Tests ---")
 
 -- Test 7: End-to-end integration with real beancount file
