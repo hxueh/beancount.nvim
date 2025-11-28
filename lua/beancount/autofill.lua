@@ -9,7 +9,7 @@ local config = require("beancount.config")
 local is_autofilling = false
 
 -- Cache of automatic posting data from beancount validation
--- Structure: {filename: {line_number_str: "amount string"}}
+-- Structure: {filename: {line_number_str: ["amount string", ...]}}
 M.automatics = {}
 
 -- Update automatic posting data from beancount validation
@@ -105,8 +105,10 @@ M.fill_buffer = function(bufnr)
     for _, line_num in ipairs(line_numbers) do
         local amounts = file_automatics[tostring(line_num)]
 
-        -- Handle both old format (string) and new format (array) for backward compatibility
-        if type(amounts) == "string" then
+        -- Handle nil, old format (string), and new format (array) for backward compatibility
+        if not amounts then
+            amounts = {}
+        elseif type(amounts) == "string" then
             amounts = { amounts }
         end
 
@@ -170,9 +172,9 @@ M.setup_buffer = function(bufnr)
             end
 
             is_autofilling = true
-            local modified = M.fill_buffer(bufnr)
+            local ok, modified = pcall(M.fill_buffer, bufnr)
             -- Save again if autofill made changes
-            if modified then
+            if ok and modified then
                 vim.cmd("silent write")
             end
             is_autofilling = false
