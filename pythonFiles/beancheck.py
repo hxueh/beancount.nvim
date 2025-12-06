@@ -1,7 +1,9 @@
 """load beancount file and print errors"""
 
 import json
+import math
 from collections import defaultdict
+from decimal import Decimal
 from sys import argv
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -10,6 +12,20 @@ from beancount.core import flags  # type: ignore
 from beancount.core.data import Close, Open, Transaction  # type: ignore
 from beancount.core.display_context import Align  # type: ignore
 from beancount.core.realization import dump_balances, realize  # type: ignore
+
+
+def get_decimal_places(tolerance: Optional[Decimal]) -> int:
+    """Get number of decimal places from tolerance value.
+
+    Examples:
+        0.01 -> 2 (USD, CNY)
+        0.001 -> 3
+        1E-8 -> 8 (BTC)
+        1 -> 0 (JPY)
+    """
+    if tolerance is None or tolerance == 0:
+        return 2  # default for most currencies
+    return max(0, -int(math.floor(math.log10(abs(float(tolerance))))))
 
 # Lazy initialization of reverse_flag_map
 _reverse_flag_map: Optional[Dict[str, str]] = None
@@ -146,18 +162,21 @@ for entry in entries:
 
                     # Build complete position string with cost basis and total cost
                     # Format: "quantity commodity {unit_price currency, date} @@ total_cost currency"
-                    position_str = f"{quantity:.2f} {commodity}"
+                    position_str = f"{quantity} {commodity}"
 
                     # Build cost notation with date if not already present
                     if cost_date:
                         # Cost already has date, keep it
-                        cost_str = f"{{{cost_number:.2f} {cost_currency}, {cost_date}}}"
+                        cost_str = f"{{{cost_number} {cost_currency}, {cost_date}}}"
                     else:
                         # Add transaction date to cost
-                        cost_str = f"{{{cost_number:.2f} {cost_currency}, {date_str}}}"
+                        cost_str = f"{{{cost_number} {cost_currency}, {date_str}}}"
 
-                    # Add total cost notation
-                    total_cost_str = f"@@ {weight:.2f} {cost_currency}"
+                    # Add total cost notation (use currency's inferred tolerance for precision)
+                    tolerance_map = options.get("inferred_tolerance_default", {})
+                    tolerance = tolerance_map.get(cost_currency)
+                    decimal_places = get_decimal_places(tolerance)
+                    total_cost_str = f"@@ {weight:.{decimal_places}f} {cost_currency}"
 
                     # Combine all parts
                     complete_position = f"{position_str} {cost_str} {total_cost_str}"

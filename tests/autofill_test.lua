@@ -391,7 +391,7 @@ run_test("should parse new JSON structure with cost_basis field", function()
         },
         cost_basis = {
             ["/test/file.beancount"] = {
-                ["5"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.00 USD"
+                ["5"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
             }
         }
     }
@@ -402,7 +402,7 @@ run_test("should parse new JSON structure with cost_basis field", function()
     test_assert(autofill.automatics["/test/file.beancount"] ~= nil, "Should parse automatics")
     test_assert(autofill.automatics["/test/file.beancount"]["10"][1] == "-100.00 USD", "Should parse automatics data")
     test_assert(autofill.cost_basis_data["/test/file.beancount"] ~= nil, "Should parse cost_basis")
-    test_assert(autofill.cost_basis_data["/test/file.beancount"]["5"] == "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.00 USD", "Should parse cost_basis data")
+    test_assert(autofill.cost_basis_data["/test/file.beancount"]["5"] == "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD", "Should parse cost_basis data")
 end)
 
 -- Test 9: update_data() should handle backward compatibility with old format
@@ -442,7 +442,7 @@ run_test("should enhance incomplete cost basis postings", function()
     local cost_data = {
         cost_basis = {
             [actual_filename] = {
-                ["2"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.00 USD"
+                ["2"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
             }
         }
     }
@@ -460,7 +460,7 @@ run_test("should enhance incomplete cost basis postings", function()
     -- Check if the line was enhanced
     local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
     test_assert(lines[2]:match("{150.00 USD, 2025%-10%-12}") ~= nil, "Should add date to cost")
-    test_assert(lines[2]:match("@@ 15000.00 USD") ~= nil, "Should add total cost notation")
+    test_assert(lines[2]:match("@@ 15000.0000 USD") ~= nil, "Should add total cost notation")
 
     -- Cleanup
     vim.api.nvim_buf_delete(test_buf, { force = true })
@@ -475,7 +475,7 @@ run_test("should skip already complete cost basis postings", function()
     local test_buf = vim.api.nvim_create_buf(false, true)
     local test_file = vim.fn.tempname() .. ".beancount"
     vim.api.nvim_buf_set_name(test_buf, test_file)
-    local complete_line = "  Assets:Stock                      100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.00 USD"
+    local complete_line = "  Assets:Stock                      100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
     vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
         "2025-10-12 * \"AAPL\" \"Stock Purchase\"",
         complete_line,
@@ -489,7 +489,7 @@ run_test("should skip already complete cost basis postings", function()
     local cost_data = {
         cost_basis = {
             [actual_filename] = {
-                ["2"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.00 USD"
+                ["2"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
             }
         }
     }
