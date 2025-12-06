@@ -382,7 +382,17 @@ M.get_account_completions = function(prefix)
     if should_include then
       local description = {}
       if details.balance and #details.balance > 0 then
-        table.insert(description, "Balance:\n  " .. table.concat(details.balance, "\n  "))
+        local balance_display = {}
+        local max_display = 3
+        for i, bal in ipairs(details.balance) do
+          if i <= max_display then
+            table.insert(balance_display, bal)
+          else
+            table.insert(balance_display, "...")
+            break
+          end
+        end
+        table.insert(description, "Balance:\n  " .. table.concat(balance_display, "\n  "))
       end
       if details.open then
         table.insert(description, "Opened: " .. details.open)
