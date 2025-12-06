@@ -379,6 +379,389 @@ run_test("should auto-fill on save (end-to-end)", function()
     vim.cmd("bdelete!")
 end)
 
+print("\n--- Cost Basis Enhancement Tests ---")
+
+-- Test 8: update_data() should parse new JSON structure with cost_basis field
+run_test("should parse new JSON structure with cost_basis field", function()
+    local test_data = {
+        automatics = {
+            ["/test/file.beancount"] = {
+                ["10"] = { "-100.00 USD" }
+            }
+        },
+        cost_basis = {
+            ["/test/file.beancount"] = {
+                ["5"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
+            }
+        }
+    }
+    local test_json = vim.json.encode(test_data)
+
+    autofill.update_data(test_json)
+
+    test_assert(autofill.automatics["/test/file.beancount"] ~= nil, "Should parse automatics")
+    test_assert(autofill.automatics["/test/file.beancount"]["10"][1] == "-100.00 USD", "Should parse automatics data")
+    test_assert(autofill.cost_basis_data["/test/file.beancount"] ~= nil, "Should parse cost_basis")
+    test_assert(autofill.cost_basis_data["/test/file.beancount"]["5"] == "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD", "Should parse cost_basis data")
+end)
+
+-- Test 9: update_data() should handle backward compatibility with old format
+run_test("should handle backward compatibility with old JSON format", function()
+    local old_format_data = {
+        ["/test/file.beancount"] = {
+            ["10"] = { "-100.00 USD" }
+        }
+    }
+    local test_json = vim.json.encode(old_format_data)
+
+    autofill.update_data(test_json)
+
+    test_assert(autofill.automatics["/test/file.beancount"] ~= nil, "Should parse old format automatics")
+    test_assert(autofill.automatics["/test/file.beancount"]["10"][1] == "-100.00 USD", "Should parse old format data")
+    test_assert(vim.tbl_isempty(autofill.cost_basis_data), "Should have empty cost_basis for old format")
+end)
+
+-- Test 10: enhance_cost_basis() should enhance incomplete postings
+run_test("should enhance incomplete cost basis postings", function()
+    config.set("auto_fill_amounts", true)
+
+    -- Create a test buffer with incomplete cost basis
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-12 * \"AAPL\" \"Stock Purchase\"",
+        "  Assets:Stock                      100.00 AAPL {150.00 USD}",
+        "  Assets:Cash                       -15000.00 USD"
+    })
+
+    -- Get the actual buffer name
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- Set up cost basis data for this file
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["2"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    -- Verify data was loaded
+    test_assert(autofill.cost_basis_data[actual_filename] ~= nil, "Should have cost_basis data for test file")
+    test_assert(autofill.cost_basis_data[actual_filename]["2"] ~= nil, "Should have data for line 2")
+
+    -- Run enhance_cost_basis
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == true, "Should report modifications")
+
+    -- Check if the line was enhanced
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    test_assert(lines[2]:match("{150.00 USD, 2025%-10%-12}") ~= nil, "Should add date to cost")
+    test_assert(lines[2]:match("@@ 15000.0000 USD") ~= nil, "Should add total cost notation")
+
+    -- Cleanup
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+-- Test 11: enhance_cost_basis() should skip already complete postings
+run_test("should skip already complete cost basis postings", function()
+    config.set("auto_fill_amounts", true)
+
+    -- Create a test buffer with complete cost basis
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    local complete_line = "  Assets:Stock                      100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-12 * \"AAPL\" \"Stock Purchase\"",
+        complete_line,
+        "  Assets:Cash                       -15000.00 USD"
+    })
+
+    -- Get the actual buffer name
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- Set up cost basis data (even though line is complete)
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["2"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    -- Run enhance_cost_basis
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == false, "Should NOT report modifications for complete line")
+
+    -- Check that line was NOT modified
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    test_assert(lines[2] == complete_line, "Line should remain unchanged")
+
+    -- Cleanup
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+print("\n--- Edge Case Tests ---")
+
+-- Test 12: Cost with date but no @@ (should add @@)
+run_test("should add @@ when cost has date but no total", function()
+    config.set("auto_fill_amounts", true)
+
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-14 * \"AAPL\" \"Stock Purchase with Date\"",
+        "  Assets:Stock                      25.00 AAPL {200.00 USD, 2025-10-14}",
+        "  Assets:Cash                       -5000.00 USD"
+    })
+
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- Cost basis data should add @@ notation even when date exists
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["2"] = "25.00 AAPL {200.00 USD, 2025-10-14} @@ 5000.00 USD"
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == true, "Should report modifications")
+
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    test_assert(lines[2]:match("@@ 5000%.00 USD") ~= nil, "Should add total cost notation")
+
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+-- Test 13: Handle deeply nested account names
+run_test("should handle deeply nested account names", function()
+    config.set("auto_fill_amounts", true)
+
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-19 * \"AAPL\" \"Deep nested account\"",
+        "  Assets:US:Broker:IRA:Stocks:Tech  10.00 AAPL {200.00 USD}",
+        "  Assets:Cash                       -2000.00 USD"
+    })
+
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["2"] = "10.00 AAPL {200.00 USD, 2025-10-19} @@ 2000.00 USD"
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == true, "Should report modifications for nested account")
+
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    test_assert(lines[2]:match("Assets:US:Broker:IRA:Stocks:Tech") ~= nil, "Should preserve account name")
+    test_assert(lines[2]:match("{200.00 USD, 2025%-10%-19}") ~= nil, "Should add date")
+    test_assert(lines[2]:match("@@ 2000%.00 USD") ~= nil, "Should add total cost")
+
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+-- Test 14: Handle empty enhanced_position string gracefully
+run_test("should handle empty enhanced_position gracefully", function()
+    config.set("auto_fill_amounts", true)
+
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    local original_line = "  Assets:Stock                      100.00 AAPL {150.00 USD}"
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-12 * \"AAPL\" \"Test\"",
+        original_line,
+        "  Assets:Cash                       -15000.00 USD"
+    })
+
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- Set up cost basis data with empty string
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["2"] = ""
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    -- Should not crash
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    -- Should not modify the line with empty data
+    test_assert(modified == false, "Should not modify with empty enhanced_position")
+
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    test_assert(lines[2] == original_line, "Line should remain unchanged")
+
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+-- Test 15: Handle line numbers beyond buffer length
+run_test("should handle line numbers beyond buffer length", function()
+    config.set("auto_fill_amounts", true)
+
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-12 * \"Test\"",
+        "  Assets:Cash                       100.00 USD"
+    })
+
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- Set up cost basis data for line 1000 (beyond buffer)
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["1000"] = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.00 USD"
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    -- Should not crash
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == false, "Should not modify when line beyond buffer")
+
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+-- Test 16: Return false when file not in cost_basis_data
+run_test("should return false when file not in cost_basis_data", function()
+    config.set("auto_fill_amounts", true)
+
+    -- Clear cost_basis_data completely - no data for any file
+    autofill.update_data("")
+
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-12 * \"Test\"",
+        "  Assets:Stock                      100.00 AAPL {150.00 USD}",
+        "  Assets:Cash                       -15000.00 USD"
+    })
+
+    -- cost_basis_data is now empty ({}), so this file won't be found
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == false, "Should return false when cost_basis_data is empty")
+
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+-- Test 17: Handle mixed cost states in same transaction
+run_test("should handle mixed cost states in same transaction", function()
+    config.set("auto_fill_amounts", true)
+
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    local complete_line = "  Assets:Stock                      50.00 AAPL {180.00 USD, 2025-10-15} @@ 9000.00 USD"
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-15 * \"AAPL\" \"Mixed cost states\"",
+        "  Assets:Stock                      100.00 AAPL {150.00 USD}",
+        complete_line,
+        "  Assets:Cash                       -24000.00 USD"
+    })
+
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- Only line 2 should be enhanced, line 3 is already complete
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["2"] = "100.00 AAPL {150.00 USD, 2025-10-15} @@ 15000.00 USD",
+                ["3"] = "50.00 AAPL {180.00 USD, 2025-10-15} @@ 9000.00 USD"
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == true, "Should report modifications for incomplete posting")
+
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    -- Line 2 should be enhanced
+    test_assert(lines[2]:match("{150.00 USD, 2025%-10%-15}") ~= nil, "Should add date to incomplete line")
+    test_assert(lines[2]:match("@@ 15000%.00 USD") ~= nil, "Should add @@ to incomplete line")
+    -- Line 3 should remain unchanged
+    test_assert(lines[3] == complete_line, "Complete line should remain unchanged")
+
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
+-- Test 18: High precision cost (preserves 3 decimal places)
+run_test("should preserve high precision in cost basis", function()
+    config.set("auto_fill_amounts", true)
+
+    local test_buf = vim.api.nvim_create_buf(false, true)
+    local test_file = vim.fn.tempname() .. ".beancount"
+    vim.api.nvim_buf_set_name(test_buf, test_file)
+    vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, {
+        "2025-10-16 * \"SGOV\" \"High precision cost\"",
+        "  Assets:Stock                      65.00 SGOV {100.438 USD}",
+        "  Assets:Cash                       -6528.47 USD"
+    })
+
+    local actual_filename = vim.api.nvim_buf_get_name(test_buf)
+
+    -- The enhanced position should preserve 100.438 (not round to 100.44)
+    local cost_data = {
+        cost_basis = {
+            [actual_filename] = {
+                ["2"] = "65.00 SGOV {100.438 USD, 2025-10-16} @@ 6528.47 USD"
+            }
+        }
+    }
+    autofill.update_data(vim.json.encode(cost_data))
+
+    local modified = autofill.enhance_cost_basis(test_buf)
+
+    test_assert(modified == true, "Should report modifications")
+
+    local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
+    -- Should preserve 100.438 precision
+    test_assert(lines[2]:match("{100.438 USD, 2025%-10%-16}") ~= nil, "Should preserve 3-decimal precision")
+    test_assert(lines[2]:match("@@ 6528%.47 USD") ~= nil, "Should have correct total cost")
+
+    vim.api.nvim_buf_delete(test_buf, { force = true })
+    config.set("auto_fill_amounts", false)
+end)
+
 -- Summary
 print("\n" .. string.rep("=", 50))
 print(string.format("Tests: %d/%d passed", tests_passed, tests_run))

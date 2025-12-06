@@ -114,11 +114,15 @@ class BeancheckTest(unittest.TestCase):
             lines: List[str] = result.stdout.strip().split("\n")
             self.assertEqual(len(lines), 4, "Expected 4 JSON output lines")
 
+            # Parse the result object which contains automatics and cost_basis
+            result_obj: Dict[str, Any] = json.loads(lines[3])
+
             return {
                 "errors": json.loads(lines[0]),
                 "data": json.loads(lines[1]),
                 "flagged": json.loads(lines[2]),
-                "automatics": json.loads(lines[3]),
+                "automatics": result_obj.get("automatics", {}),
+                "cost_basis": result_obj.get("cost_basis", {}),
             }
         except subprocess.CalledProcessError as e:
             self.fail(f"Failed to run beancheck.py: {e}")
@@ -360,6 +364,196 @@ class BeancheckTest(unittest.TestCase):
 
         # Should have at least some balances in the test data
         self.assertTrue(balance_found, "Should have processed some balances")
+
+
+class CostBasisTest(unittest.TestCase):
+    """Test cost basis data generation and precision handling"""
+
+    # Class attributes
+    test_dir: Path
+    beancheck_script: Path
+    example_dir: Path
+    autofill_file: Path
+    python_path: str
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Set up test environment"""
+        cls.test_dir = Path(__file__).parent
+        cls.beancheck_script = cls.test_dir.parent / "pythonFiles" / "beancheck.py"
+        cls.example_dir = cls.test_dir / "example"
+        cls.autofill_file = cls.example_dir / "test_autofill.beancount"
+        cls.python_path = BeancheckTest.find_python_executable()
+
+    def run_beancheck(self, filename: str) -> Dict[str, Any]:
+        """Run beancheck.py and return parsed JSON output"""
+        cmd: List[str] = [str(self.python_path), str(self.beancheck_script), filename]
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, cwd=self.test_dir.parent
+        )
+        if result.returncode != 0:
+            self.fail(f"beancheck.py failed: {result.stderr}")
+
+        lines: List[str] = result.stdout.strip().split("\n")
+        self.assertEqual(len(lines), 4, "Expected 4 JSON output lines")
+
+        result_obj: Dict[str, Any] = json.loads(lines[3])
+        return {
+            "errors": json.loads(lines[0]),
+            "data": json.loads(lines[1]),
+            "flagged": json.loads(lines[2]),
+            "automatics": result_obj.get("automatics", {}),
+            "cost_basis": result_obj.get("cost_basis", {}),
+        }
+
+    def test_cost_basis_extraction(self) -> None:
+        """Test cost basis data is correctly extracted"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Should have cost_basis data
+        self.assertIsInstance(cost_basis, dict)
+        self.assertGreater(len(cost_basis), 0, "Should have cost_basis data")
+
+        # Check structure: {filename: {lineno: position_string}}
+        for filename, line_data in cost_basis.items():
+            self.assertIsInstance(line_data, dict)
+            for lineno, position in line_data.items():
+                self.assertIsInstance(lineno, str)
+                self.assertIsInstance(position, str)
+                # Position should contain @@ notation
+                self.assertIn("@@", position)
+
+    def test_cost_basis_preserves_decimal_precision(self) -> None:
+        """Test that original decimal precision is preserved (100.438 stays as 100.438)"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Find the high precision test case (line with 100.438)
+        found_high_precision = False
+        for filename, line_data in cost_basis.items():
+            for lineno, position in line_data.items():
+                if "100.438" in position:
+                    found_high_precision = True
+                    # Should preserve 100.438, not round to 100.44
+                    self.assertIn("100.438", position)
+                    self.assertNotIn("100.44 ", position)  # Note space to avoid matching 100.438
+
+        self.assertTrue(found_high_precision, "Should find high precision test case")
+
+    def test_cost_basis_negative_quantity(self) -> None:
+        """Test cost basis with negative quantity (sell) uses absolute value for @@"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Find the sell transaction (negative quantity)
+        found_sell = False
+        for filename, line_data in cost_basis.items():
+            for lineno, position in line_data.items():
+                if "-50.00 AAPL" in position:
+                    found_sell = True
+                    # Total cost should be positive (absolute value)
+                    self.assertIn("@@ 7500", position)
+                    self.assertNotIn("@@ -7500", position)
+
+        self.assertTrue(found_sell, "Should find sell transaction test case")
+
+    def test_cost_basis_tolerance_usd(self) -> None:
+        """Test USD uses 2 decimal places from inferred_tolerance_default"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Find USD transaction and verify 2 decimal places
+        found_usd = False
+        for filename, line_data in cost_basis.items():
+            for lineno, position in line_data.items():
+                if "AAPL" in position and "USD" in position and "150.00 USD" in position:
+                    found_usd = True
+                    # Should have 2 decimal places for USD total (e.g., 15000.00)
+                    import re
+                    match = re.search(r"@@\s+(\d+\.\d+)\s+USD", position)
+                    if match:
+                        total = match.group(1)
+                        decimals = len(total.split(".")[1]) if "." in total else 0
+                        self.assertEqual(decimals, 2, f"USD should have 2 decimals, got {decimals}")
+
+        self.assertTrue(found_usd, "Should find USD test case")
+
+    def test_cost_basis_tolerance_btc(self) -> None:
+        """Test BTC uses 8 decimal places from inferred_tolerance_default"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Find BTC transaction
+        found_btc = False
+        for filename, line_data in cost_basis.items():
+            for lineno, position in line_data.items():
+                if "ETH" in position and "BTC" in position:
+                    found_btc = True
+                    # Should have 8 decimal places for BTC total
+                    import re
+                    match = re.search(r"@@\s+(\d+\.\d+)\s+BTC", position)
+                    if match:
+                        total = match.group(1)
+                        decimals = len(total.split(".")[1]) if "." in total else 0
+                        self.assertEqual(decimals, 8, f"BTC should have 8 decimals, got {decimals}")
+
+        self.assertTrue(found_btc, "Should find BTC test case")
+
+    def test_cost_basis_tolerance_jpy(self) -> None:
+        """Test JPY uses 0 decimal places from inferred_tolerance_default"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Find JPY transaction
+        found_jpy = False
+        for filename, line_data in cost_basis.items():
+            for lineno, position in line_data.items():
+                if "JPSTOCK" in position and "JPY" in position:
+                    found_jpy = True
+                    # Should have 0 decimal places for JPY total (e.g., 15000 not 15000.00)
+                    import re
+                    match = re.search(r"@@\s+(\d+)\s+JPY", position)
+                    if match:
+                        # No decimal point means 0 decimals
+                        self.assertNotIn(".", match.group(1))
+
+        self.assertTrue(found_jpy, "Should find JPY test case")
+
+    def test_cost_basis_with_existing_date(self) -> None:
+        """Test cost basis that already has a date preserves it"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Find the transaction with existing date (line 39 in test file)
+        found_existing_date = False
+        for filename, line_data in cost_basis.items():
+            for lineno, position in line_data.items():
+                if "25.00 AAPL" in position and "2025-10-14" in position:
+                    found_existing_date = True
+                    # Date should be preserved
+                    self.assertIn("2025-10-14", position)
+
+        self.assertTrue(found_existing_date, "Should find transaction with existing date")
+
+    def test_cost_basis_deeply_nested_account(self) -> None:
+        """Test cost basis works with deeply nested account names"""
+        result: Dict[str, Any] = self.run_beancheck(str(self.autofill_file))
+        cost_basis: Dict[str, Dict[str, str]] = result["cost_basis"]
+
+        # Find the deeply nested account test case
+        found_deep = False
+        for filename, line_data in cost_basis.items():
+            for lineno, position in line_data.items():
+                # This is the deeply nested account transaction
+                if "10.00 AAPL" in position and "200.00 USD" in position:
+                    # Check for 2025-10-19 date (the deep nested account transaction)
+                    if "2025-10-19" in position:
+                        found_deep = True
+                        self.assertIn("@@", position)
+                        self.assertIn("2000", position)  # 10 * 200 = 2000
+
+        self.assertTrue(found_deep, "Should find deeply nested account test case")
 
 
 class BeancheckErrorTest(unittest.TestCase):

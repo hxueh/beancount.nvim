@@ -1,7 +1,9 @@
 """load beancount file and print errors"""
 
 import json
+import math
 from collections import defaultdict
+from decimal import Decimal
 from sys import argv
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -10,6 +12,20 @@ from beancount.core import flags  # type: ignore
 from beancount.core.data import Close, Open, Transaction  # type: ignore
 from beancount.core.display_context import Align  # type: ignore
 from beancount.core.realization import dump_balances, realize  # type: ignore
+
+
+def get_decimal_places(tolerance: Optional[Decimal]) -> int:
+    """Get number of decimal places from tolerance value.
+
+    Examples:
+        0.01 -> 2 (USD, CNY)
+        0.001 -> 3
+        1E-8 -> 8 (BTC)
+        1 -> 0 (JPY)
+    """
+    if tolerance is None or tolerance == 0:
+        return 2  # default for most currencies
+    return max(0, -int(math.floor(math.log10(abs(float(tolerance))))))
 
 # Lazy initialization of reverse_flag_map
 _reverse_flag_map: Optional[Dict[str, str]] = None
@@ -63,6 +79,7 @@ error_list: List[Dict[str, Union[str, int]]] = [
 # Pre-allocate data structures with better initial capacity
 accounts: Dict[str, Dict[str, Union[str, List[str]]]] = {}
 automatics: Dict[str, Dict[int, List[str]]] = defaultdict(dict)
+cost_basis_data: Dict[str, Dict[int, str]] = defaultdict(dict)
 commodities: Set[str] = set()
 flagged_entries: List[Dict[str, Union[str, int]]] = []
 
@@ -82,6 +99,7 @@ for entry in entries:
         entry_payee: Optional[str] = getattr(entry, "payee", None)
         entry_narration: str = str(getattr(entry, "narration", ""))
         entry_postings: List[Any] = getattr(entry, "postings", [])
+        entry_date: Any = getattr(entry, "date", None)
 
         # Handle payee collection
         if complete_payee_narration and entry_payee:
@@ -121,6 +139,50 @@ for entry in entries:
                     if lineno not in automatics[filename]:
                         automatics[filename][lineno] = []
                     automatics[filename][lineno].append(amount_str)
+
+            # Handle cost basis enhancement
+            cost = getattr(posting, "cost", None)
+            if cost is not None and units is not None and entry_date is not None:
+                filename: str = str(posting_meta.get("filename", ""))
+                lineno: int = int(posting_meta.get("lineno", 0))
+
+                # Extract posting components
+                quantity = getattr(units, "number", None)
+                commodity = str(getattr(units, "currency", ""))
+                cost_number = getattr(cost, "number", None)
+                cost_currency = str(getattr(cost, "currency", ""))
+                cost_date = getattr(cost, "date", None)
+
+                if quantity is not None and cost_number is not None and commodity and cost_currency:
+                    # Calculate total cost (weight) - use absolute value for @@ notation
+                    weight = abs(quantity * cost_number)
+
+                    # Format date as YYYY-MM-DD
+                    date_str = str(entry_date) if entry_date else ""
+
+                    # Build complete position string with cost basis and total cost
+                    # Format: "quantity commodity {unit_price currency, date} @@ total_cost currency"
+                    position_str = f"{quantity} {commodity}"
+
+                    # Build cost notation with date if not already present
+                    if cost_date:
+                        # Cost already has date, keep it
+                        cost_str = f"{{{cost_number} {cost_currency}, {cost_date}}}"
+                    else:
+                        # Add transaction date to cost
+                        cost_str = f"{{{cost_number} {cost_currency}, {date_str}}}"
+
+                    # Add total cost notation (use currency's inferred tolerance for precision)
+                    tolerance_map = options.get("inferred_tolerance_default", {})
+                    tolerance = tolerance_map.get(cost_currency)
+                    decimal_places = get_decimal_places(tolerance)
+                    total_cost_str = f"@@ {weight:.{decimal_places}f} {cost_currency}"
+
+                    # Combine all parts
+                    complete_position = f"{position_str} {cost_str} {total_cost_str}"
+
+                    # Store the enhanced posting data
+                    cost_basis_data[filename][lineno] = complete_position
 
         commodities.update(txn_commodities)
 
@@ -202,9 +264,15 @@ output: Dict[str, Any] = {
     "links": list(links),
 }
 
+# Build result structure with automatics and cost_basis
+result: Dict[str, Any] = {
+    "automatics": automatics,
+    "cost_basis": cost_basis_data,
+}
+
 # Use separators to reduce JSON output size
 json_separators: Tuple[str, str] = (",", ":")
 print(json.dumps(error_list, separators=json_separators))
 print(json.dumps(output, separators=json_separators))
 print(json.dumps(flagged_entries, separators=json_separators))
-print(json.dumps(automatics, separators=json_separators))
+print(json.dumps(result, separators=json_separators))
