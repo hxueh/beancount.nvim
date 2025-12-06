@@ -160,7 +160,7 @@ balance_capture: BalanceCapture = BalanceCapture()
 dump_balances(
     realize(entries),
     options["dcontext"].build(alignment=Align.DOT, reserved=2),
-    at_cost=True,
+    at_cost=False,
     fullnames=True,
     file=balance_capture,
 )
