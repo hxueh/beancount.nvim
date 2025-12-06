@@ -382,7 +382,7 @@ M.get_account_completions = function(prefix)
     if should_include then
       local description = {}
       if details.balance and #details.balance > 0 then
-        table.insert(description, "Balance: " .. table.concat(details.balance, ", "))
+        table.insert(description, "Balance:\n  " .. table.concat(details.balance, "\n  "))
       end
       if details.open then
         table.insert(description, "Opened: " .. details.open)
