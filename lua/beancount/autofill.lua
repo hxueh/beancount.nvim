@@ -177,6 +177,11 @@ M.enhance_cost_basis = function(bufnr)
 
     -- Process each line that has cost basis data
     for line_str, enhanced_position in pairs(file_cost_basis) do
+        -- Skip empty enhanced_position strings
+        if not enhanced_position or enhanced_position == "" then
+            goto continue
+        end
+
         local line_num = tonumber(line_str)
         if line_num and line_num > 0 and line_num <= vim.api.nvim_buf_line_count(bufnr) then
             -- Convert to 0-based indexing for nvim_buf_get_lines
@@ -206,6 +211,8 @@ M.enhance_cost_basis = function(bufnr)
                 end
             end
         end
+
+        ::continue::
     end
 
     return lines_modified > 0

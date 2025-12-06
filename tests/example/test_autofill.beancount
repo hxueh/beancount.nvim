@@ -1,11 +1,17 @@
 ; Test file for auto-fill functionality
 option "operating_currency" "USD"
+option "inferred_tolerance_default" "USD:0.01"
+option "inferred_tolerance_default" "BTC:0.00000001"
+option "inferred_tolerance_default" "JPY:1"
 
 ; Open accounts
 2025-10-01 open Assets:Stock
 2025-10-01 open Expenses:Trading
 2025-10-01 open Expenses:Food
 2025-10-01 open Assets:Cash
+2025-10-01 open Assets:Crypto
+2025-10-01 open Assets:US:Broker:IRA:Stocks:Tech
+2025-10-01 open Assets:JPY
 
 ; Test transaction 1: Stock purchase with missing cash balance
 2025-10-10 * "AAPL" "Stock Purchase"
@@ -37,3 +43,23 @@ option "operating_currency" "USD"
 2025-10-15 * "AAPL" "Already Complete"
   Assets:Stock                      10.00 AAPL {180.00 USD, 2025-10-15} @@ 1800.00 USD
   Assets:Cash                       -1800.00 USD
+
+; Edge case 7: High precision cost (3 decimals - should preserve 100.438)
+2025-10-16 * "SGOV" "High precision cost"
+  Assets:Stock                      65.00 SGOV {100.438 USD}
+  Assets:Cash                       -6528.47 USD
+
+; Edge case 8: BTC precision (8 decimals for total)
+2025-10-17 * "ETH" "Crypto purchase"
+  Assets:Crypto                     0.5 ETH {0.05 BTC}
+  Assets:Cash
+
+; Edge case 9: JPY with 0 decimal places
+2025-10-18 * "JP-STOCK" "JPY stock purchase"
+  Assets:Stock                      100 JPSTOCK {150 JPY}
+  Assets:JPY                        -15000 JPY
+
+; Edge case 10: Deeply nested account name
+2025-10-19 * "AAPL" "Deep nested account"
+  Assets:US:Broker:IRA:Stocks:Tech  10.00 AAPL {200.00 USD}
+  Assets:Cash                       -2000.00 USD
