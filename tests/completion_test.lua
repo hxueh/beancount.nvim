@@ -865,6 +865,123 @@ run_test("should handle complete completion workflow", function()
   end
 end)
 
+-- Test 35: Balance display with multiple asset types
+run_test("should display balances on separate lines with newlines", function()
+  local completion = get_completion()
+  completion.completion_data.accounts = {
+    ["Assets:Stock"] = {
+      balance = { "200 AAPL", "100 USD" },
+      open = "2024-01-01",
+      currencies = { "AAPL", "USD" },
+    },
+  }
+
+  local items = completion.get_account_completions("Assets:Stock")
+  local found_item = nil
+  for _, item in ipairs(items) do
+    if item.label == "Assets:Stock" then
+      found_item = item
+      break
+    end
+  end
+
+  test_assert(found_item ~= nil, "should find Assets:Stock")
+  if found_item then
+    -- Check that balance uses newlines for each asset
+    test_assert(found_item.detail:find("Balance:"), "should contain Balance header")
+    test_assert(found_item.detail:find("200 AAPL"), "should contain AAPL balance with currency symbol")
+    test_assert(found_item.detail:find("100 USD"), "should contain USD balance with currency symbol")
+    test_assert(found_item.detail:find("\n"), "should use newlines for multi-asset display")
+  end
+end)
+
+-- Test 36: Balance display limited to 3 asset types with ellipsis
+run_test("should limit balance display to 3 assets with ellipsis", function()
+  local completion = get_completion()
+  completion.completion_data.accounts = {
+    ["Assets:Diversified"] = {
+      balance = { "100 AAPL", "50 GOOG", "200 USD", "10 BTC", "5 ETH" },
+      open = "2024-01-01",
+      currencies = { "AAPL", "GOOG", "USD", "BTC", "ETH" },
+    },
+  }
+
+  local items = completion.get_account_completions("Assets:Diversified")
+  local found_item = nil
+  for _, item in ipairs(items) do
+    if item.label == "Assets:Diversified" then
+      found_item = item
+      break
+    end
+  end
+
+  test_assert(found_item ~= nil, "should find Assets:Diversified")
+  if found_item then
+    -- Should show first 3 assets
+    test_assert(found_item.detail:find("100 AAPL"), "should contain first asset")
+    test_assert(found_item.detail:find("50 GOOG"), "should contain second asset")
+    test_assert(found_item.detail:find("200 USD"), "should contain third asset")
+    -- Should have ellipsis for remaining
+    test_assert(found_item.detail:find("%.%.%."), "should have ellipsis for additional assets")
+    -- Should NOT show 4th and 5th assets
+    test_assert(not found_item.detail:find("10 BTC"), "should NOT contain fourth asset")
+    test_assert(not found_item.detail:find("5 ETH"), "should NOT contain fifth asset")
+  end
+end)
+
+-- Test 37: Balance display uses divider line between sections
+run_test("should use divider line between balance and metadata", function()
+  local completion = get_completion()
+  completion.completion_data.accounts = {
+    ["Assets:Test"] = {
+      balance = { "100 USD" },
+      open = "2024-01-01",
+      currencies = { "USD" },
+    },
+  }
+
+  local items = completion.get_account_completions("Assets:Test")
+  local found_item = nil
+  for _, item in ipairs(items) do
+    if item.label == "Assets:Test" then
+      found_item = item
+      break
+    end
+  end
+
+  test_assert(found_item ~= nil, "should find Assets:Test")
+  if found_item then
+    -- Should have divider between balance and opened date
+    test_assert(found_item.detail:find("----"), "should have divider line between sections")
+    test_assert(found_item.detail:find("Opened:"), "should contain Opened metadata")
+  end
+end)
+
+-- Test 38: Hover displays balance with currency symbols
+run_test("should display balance with currency symbols in hover", function()
+  local completion = get_completion()
+  completion.completion_data.accounts = {
+    ["Assets:Stock"] = {
+      balance = { "200 AAPL", "100 USD" },
+      open = "2024-01-01",
+      currencies = { "AAPL", "USD" },
+    },
+  }
+
+  completion.hover_enabled = true
+  local hover_info = completion.get_account_hover("Assets:Stock")
+
+  test_assert(hover_info ~= nil, "should return hover info")
+  if hover_info then
+    test_assert(hover_info.contents.kind == "markdown", "should be markdown format")
+    -- Should show each balance with currency symbol
+    test_assert(hover_info.contents.value:find("200 AAPL"), "should contain AAPL balance with currency")
+    test_assert(hover_info.contents.value:find("100 USD"), "should contain USD balance with currency")
+    -- Should have Current Balance header
+    test_assert(hover_info.contents.value:find("Current Balance"), "should have Current Balance header")
+  end
+end)
+
 -- Print test results
 print("\nTest Summary:")
 print("Tests run: " .. tests_run)

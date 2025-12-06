@@ -160,7 +160,7 @@ balance_capture: BalanceCapture = BalanceCapture()
 dump_balances(
     realize(entries),
     options["dcontext"].build(alignment=Align.DOT, reserved=2),
-    at_cost=True,
+    at_cost=False,
     fullnames=True,
     file=balance_capture,
 )
@@ -174,9 +174,8 @@ for line in balance_capture.get_lines():
         remainder: str
         account_part, sep, remainder = line.partition(" ")
         if sep and remainder:
-            # Find the balance part more efficiently
-            balance_part: str
-            balance_part, _, _ = remainder.strip().partition(" ")
+            # Get the full balance including currency (e.g., "200 AAPL" not just "200")
+            balance_part: str = remainder.strip()
             if balance_part:
                 account_data: Optional[Dict[str, Union[str, List[str]]]] = accounts.get(
                     account_part

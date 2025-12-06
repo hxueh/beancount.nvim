@@ -6,12 +6,12 @@ local M = {}
 -- Cached completion data loaded from beancount files
 -- Updated via external Python scripts that parse beancount data
 M.completion_data = {
-  accounts = {}, -- Account names with metadata (balances, currencies, etc.)
+  accounts = {},    -- Account names with metadata (balances, currencies, etc.)
   commodities = {}, -- Available currencies and commodities
-  payees = {}, -- Payee names from transaction history
-  narrations = {}, -- Transaction descriptions from history
-  tags = {}, -- Available tags (#tag-name)
-  links = {}, -- Available links (^link-name)
+  payees = {},      -- Payee names from transaction history
+  narrations = {},  -- Transaction descriptions from history
+  tags = {},        -- Available tags (#tag-name)
+  links = {},       -- Available links (^link-name)
 }
 
 -- Flag to enable/disable hover functionality for accounts
@@ -133,17 +133,17 @@ M.is_account_context = function(line, col)
 
   -- Check if we're continuing an account name (already has colon)
   if
-    before_cursor:match("[A-Za-z][a-zA-Z0-9_-]*:[a-zA-Z0-9:_-]*$")
-    or before_cursor:match("[A-Za-z][a-zA-Z0-9_-]*:$")
+      before_cursor:match("[A-Za-z][a-zA-Z0-9_-]*:[a-zA-Z0-9:_-]*$")
+      or before_cursor:match("[A-Za-z][a-zA-Z0-9_-]*:$")
   then
     return true
   end
 
   -- After specific beancount directives that require accounts
   if
-    before_cursor:match("open%s+[a-zA-Z0-9:_-]*$")
-    or before_cursor:match("close%s+[a-zA-Z0-9:_-]*$")
-    or before_cursor:match("balance%s+[a-zA-Z0-9:_-]*$")
+      before_cursor:match("open%s+[a-zA-Z0-9:_-]*$")
+      or before_cursor:match("close%s+[a-zA-Z0-9:_-]*$")
+      or before_cursor:match("balance%s+[a-zA-Z0-9:_-]*$")
   then
     return true
   end
@@ -382,7 +382,17 @@ M.get_account_completions = function(prefix)
     if should_include then
       local description = {}
       if details.balance and #details.balance > 0 then
-        table.insert(description, "Balance: " .. table.concat(details.balance, ", "))
+        local balance_display = {}
+        local max_display = 3
+        for i, bal in ipairs(details.balance) do
+          if i <= max_display then
+            table.insert(balance_display, bal)
+          else
+            table.insert(balance_display, "...")
+            break
+          end
+        end
+        table.insert(description, "Balance:\n  " .. table.concat(balance_display, "\n  "))
       end
       if details.open then
         table.insert(description, "Opened: " .. details.open)
@@ -398,7 +408,7 @@ M.get_account_completions = function(prefix)
       table.insert(items, {
         label = account,
         kind = 6, -- Class
-        detail = table.concat(description, " | "),
+        detail = table.concat(description, "\n----\n"),
         insertText = insertText,
       })
     end
@@ -598,7 +608,7 @@ end
 M.show_hover = function()
   local pos = vim.api.nvim_win_get_cursor(0)
   local line = pos[1] - 1 -- Convert to 0-based
-  local col = pos[2] -- Already 0-based
+  local col = pos[2]      -- Already 0-based
 
   local hover_info = M.hover(0, line, col)
   if not hover_info then
@@ -613,7 +623,7 @@ M.show_hover = function()
   for _, line_content in ipairs(content) do
     width = math.max(width, #line_content)
   end
-  width = math.min(width, 80) -- Max width
+  width = math.min(width, 80)           -- Max width
 
   local height = math.min(#content, 20) -- Max height
 
