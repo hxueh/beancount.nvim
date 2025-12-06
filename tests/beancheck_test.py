@@ -114,11 +114,15 @@ class BeancheckTest(unittest.TestCase):
             lines: List[str] = result.stdout.strip().split("\n")
             self.assertEqual(len(lines), 4, "Expected 4 JSON output lines")
 
+            # Parse the result object which contains automatics and cost_basis
+            result_obj: Dict[str, Any] = json.loads(lines[3])
+
             return {
                 "errors": json.loads(lines[0]),
                 "data": json.loads(lines[1]),
                 "flagged": json.loads(lines[2]),
-                "automatics": json.loads(lines[3]),
+                "automatics": result_obj.get("automatics", {}),
+                "cost_basis": result_obj.get("cost_basis", {}),
             }
         except subprocess.CalledProcessError as e:
             self.fail(f"Failed to run beancheck.py: {e}")

@@ -17,3 +17,23 @@ option "operating_currency" "USD"
 2025-10-11 * "Grocery Store" "Weekly groceries"
   Expenses:Food                     50.00 USD
   Assets:Cash
+
+; Test transaction 3: Stock purchase with incomplete cost basis (missing date and @@)
+2025-10-12 * "AAPL" "Stock Purchase with Cost"
+  Assets:Stock                      100.00 AAPL {150.00 USD}
+  Assets:Cash                       -15000.00 USD
+
+; Test transaction 4: Stock sale with incomplete cost basis
+2025-10-13 * "AAPL" "Stock Sale"
+  Assets:Stock                      -50.00 AAPL {150.00 USD}
+  Assets:Cash                       7500.00 USD
+
+; Test transaction 5: Stock with cost basis that already has date (should still add @@)
+2025-10-14 * "AAPL" "Stock Purchase with Date"
+  Assets:Stock                      25.00 AAPL {200.00 USD, 2025-10-14}
+  Assets:Cash                       -5000.00 USD
+
+; Test transaction 6: Stock with complete cost basis (should NOT modify)
+2025-10-15 * "AAPL" "Already Complete"
+  Assets:Stock                      10.00 AAPL {180.00 USD, 2025-10-15} @@ 1800.00 USD
+  Assets:Cash                       -1800.00 USD
