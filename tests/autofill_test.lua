@@ -402,7 +402,8 @@ run_test("should parse new JSON structure with cost_basis field", function()
     test_assert(autofill.automatics["/test/file.beancount"] ~= nil, "Should parse automatics")
     test_assert(autofill.automatics["/test/file.beancount"]["10"][1] == "-100.00 USD", "Should parse automatics data")
     test_assert(autofill.cost_basis_data["/test/file.beancount"] ~= nil, "Should parse cost_basis")
-    test_assert(autofill.cost_basis_data["/test/file.beancount"]["5"] == "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD", "Should parse cost_basis data")
+    local expected_cost = "100.00 AAPL {150.00 USD, 2025-10-12} @@ 15000.0000 USD"
+    test_assert(autofill.cost_basis_data["/test/file.beancount"]["5"] == expected_cost, "Should parse cost_basis data")
 end)
 
 -- Test 9: update_data() should handle backward compatibility with old format
