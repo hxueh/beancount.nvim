@@ -146,11 +146,11 @@ M.align_amount = function(line_num)
 end
 
 M.indent_posting_line = function(line_num)
-  local tab_size = vim.bo.tabstop or 4
-  local indent = string.rep(" ", tab_size)
+  local indent_size = vim.fn.shiftwidth()
+  local indent = string.rep(" ", indent_size)
 
   vim.fn.setline(line_num, indent)
-  vim.fn.cursor(line_num, tab_size + 1)
+  vim.fn.cursor(line_num, indent_size + 1)
 end
 
 -- Format a complete transaction block

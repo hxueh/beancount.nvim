@@ -10,12 +10,6 @@ vim.b.did_ftplugin = 1
 vim.bo.commentstring = ";; %s"
 vim.bo.comments = "b:;;"
 
--- Set indentation options
-vim.bo.expandtab = true
-vim.bo.shiftwidth = 4
-vim.bo.tabstop = 4
-vim.bo.softtabstop = 4
-
 -- Set folding options
 vim.wo.foldmethod = "expr"
 vim.wo.foldexpr = "v:lua.require('beancount.fold').foldexpr()"
@@ -63,4 +57,4 @@ end
 require("beancount").setup_buffer()
 
 -- Set the undo point for the plugin loading
-vim.b.undo_ftplugin = "setl cms< com< fo< fdm< fde< et< sw< ts< sts<"
+vim.b.undo_ftplugin = "setl cms< com< fo< fdm< fde<"
