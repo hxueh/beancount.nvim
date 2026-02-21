@@ -22,6 +22,8 @@ test:
 	@nvim --headless --noplugin --clean -c "luafile tests/completion_blink_test.lua"
 	@nvim --headless --noplugin --clean -c "luafile tests/completion_test.lua"
 	@nvim --headless --noplugin --clean -c "luafile tests/autofill_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/indentation_test.lua"
+	@nvim --headless --noplugin --clean -c "luafile tests/formatter_test.lua"
 	@echo "Running Python tests..."
 	@python3 -m unittest tests/beancheck_test.py || echo "Python unittest not available or tests failed. Install with: pip install beancount"
 
