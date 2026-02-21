@@ -37,7 +37,9 @@ run_test("indent_posting_line uses tab when expandtab=false", function()
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "" })
   formatter.indent_posting_line(1)
   local line = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
+  local col = vim.fn.col(".")
   test_assert(line == "\t", "expected tab character, got: " .. vim.inspect(line))
+  test_assert(col == #line, "expected cursor at end of indent, got: " .. tostring(col))
   vim.api.nvim_buf_delete(bufnr, { force = true })
 end)
 
@@ -50,7 +52,9 @@ run_test("indent_posting_line uses spaces when expandtab=true", function()
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "" })
   formatter.indent_posting_line(1)
   local line = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
+  local col = vim.fn.col(".")
   test_assert(line == "    ", "expected 4 spaces, got: " .. vim.inspect(line))
+  test_assert(col == #line, "expected cursor at end of indent, got: " .. tostring(col))
   vim.api.nvim_buf_delete(bufnr, { force = true })
 end)
 
@@ -63,7 +67,9 @@ run_test("indent_posting_line uses 2 spaces when shiftwidth=2 and expandtab=true
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "" })
   formatter.indent_posting_line(1)
   local line = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
+  local col = vim.fn.col(".")
   test_assert(line == "  ", "expected 2 spaces, got: " .. vim.inspect(line))
+  test_assert(col == #line, "expected cursor at end of indent, got: " .. tostring(col))
   vim.api.nvim_buf_delete(bufnr, { force = true })
 end)
 

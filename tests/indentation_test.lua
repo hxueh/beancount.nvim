@@ -48,6 +48,17 @@ run_test("should not override user tabstop=2", function()
   vim.api.nvim_buf_delete(bufnr, { force = true })
 end)
 
+-- Verify ftplugin preserves user softtabstop
+run_test("should not override user softtabstop=2", function()
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(bufnr)
+  vim.api.nvim_buf_set_option(bufnr, "softtabstop", 2)
+  vim.b.did_ftplugin = nil
+  vim.cmd("source ftplugin/beancount.lua")
+  test_assert(vim.api.nvim_buf_get_option(bufnr, "softtabstop") == 2, "softtabstop should remain 2")
+  vim.api.nvim_buf_delete(bufnr, { force = true })
+end)
+
 -- Verify ftplugin preserves user expandtab=false
 run_test("should not override user expandtab=false", function()
   local bufnr = vim.api.nvim_create_buf(false, true)
