@@ -3,14 +3,30 @@
 -- Groups transactions, directives, and other logical blocks
 local M = {}
 
--- Buffer-local cache for marker nesting levels, keyed on (bufnr, changedtick)
-local marker_cache = { bufnr = -1, tick = -1, levels = {} }
+-- Marker nesting cache keyed by buffer, with changedtick invalidation.
+local marker_cache = {}
 
-local function update_marker_cache()
-  local bufnr = vim.api.nvim_get_current_buf()
+local function apply_open_marker(current_level, marker_num)
+  local n = tonumber(marker_num)
+  if n then
+    return n
+  end
+  return current_level + 1
+end
+
+local function apply_close_marker(current_level, marker_num)
+  local n = tonumber(marker_num)
+  if n then
+    return n - 1
+  end
+  return math.max(0, current_level - 1)
+end
+
+local function update_marker_cache(bufnr)
   local tick = vim.api.nvim_buf_get_changedtick(bufnr)
-  if marker_cache.bufnr == bufnr and marker_cache.tick == tick then
-    return
+  local cached = marker_cache[bufnr]
+  if cached and cached.tick == tick then
+    return cached.levels
   end
 
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -20,38 +36,42 @@ local function update_marker_cache()
   for i, line in ipairs(lines) do
     local open_num = line:match("{{{(%d*)")
     local close_num = line:match("}}}(%d*)")
+    local open_pos = line:find("{{{", 1, true)
+    local close_pos = line:find("}}}", 1, true)
 
-    if open_num then
-      local n = tonumber(open_num)
-      if n then
-        current_level = n
+    if open_num and close_num then
+      if open_pos < close_pos then
+        current_level = apply_open_marker(current_level, open_num)
+        levels[i] = { marker = nil, level = current_level }
+        current_level = apply_close_marker(current_level, close_num)
       else
-        current_level = current_level + 1
+        levels[i] = { marker = nil, level = current_level }
+        current_level = apply_close_marker(current_level, close_num)
+        current_level = apply_open_marker(current_level, open_num)
       end
+    elseif open_num then
+      current_level = apply_open_marker(current_level, open_num)
       levels[i] = { marker = "open", level = current_level }
     elseif close_num then
-      local n = tonumber(close_num)
       levels[i] = { marker = "close", level = current_level }
-      if n then
-        current_level = n - 1
-      else
-        current_level = math.max(0, current_level - 1)
-      end
+      current_level = apply_close_marker(current_level, close_num)
     else
       levels[i] = { marker = nil, level = current_level }
     end
   end
 
-  marker_cache = { bufnr = bufnr, tick = tick, levels = levels }
+  marker_cache[bufnr] = { tick = tick, levels = levels }
+  return levels
 end
 
 -- Main folding expression function for beancount syntax
 -- @return string: Fold level indicator for current line
 M.foldexpr = function()
-  update_marker_cache()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local levels = update_marker_cache(bufnr)
 
   local lnum = vim.v.lnum
-  local info = marker_cache.levels[lnum] or { marker = nil, level = 0 }
+  local info = levels[lnum] or { marker = nil, level = 0 }
   local base = info.level
 
   -- Handle fold marker open/close lines

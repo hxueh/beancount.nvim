@@ -1266,6 +1266,80 @@ run_test("should handle explicitly numbered nested markers {{{1 and {{{2", funct
   restore_all_mocks()
 end)
 
+-- Test 55: Marker cache should be per-buffer, not globally single-entry
+run_test("should cache marker levels independently per buffer", function()
+  local fold = get_fold()
+  local buffers = {
+    [1001] = {
+      tick = 1,
+      lines = {
+        "; a {{{",
+        "",
+        "; }}}",
+      },
+    },
+    [1002] = {
+      tick = 1,
+      lines = {
+        "; b {{{",
+        "",
+        "; }}}",
+      },
+    },
+  }
+
+  local current_buf = 1001
+  local scan_calls = { [1001] = 0, [1002] = 0 }
+
+  vim.api.nvim_get_current_buf = function() return current_buf end
+  vim.api.nvim_buf_get_changedtick = function(bufnr) return buffers[bufnr].tick end
+  vim.api.nvim_buf_get_lines = function(bufnr, s, e, _)
+    if s == 0 and e == -1 then
+      scan_calls[bufnr] = scan_calls[bufnr] + 1
+      return buffers[bufnr].lines
+    end
+    return {}
+  end
+  vim.fn.getline = function(_) return buffers[current_buf].lines[vim.v.lnum] or "" end
+
+  for _ = 1, 4 do
+    current_buf = 1001
+    vim.v.lnum = 2
+    fold.foldexpr()
+
+    current_buf = 1002
+    vim.v.lnum = 2
+    fold.foldexpr()
+  end
+
+  test_assert(scan_calls[1001] == 1, "buffer 1001 should be scanned once when unchanged")
+  test_assert(scan_calls[1002] == 1, "buffer 1002 should be scanned once when unchanged")
+
+  current_buf = 1001
+  buffers[1001].tick = 2
+  vim.v.lnum = 2
+  fold.foldexpr()
+  test_assert(scan_calls[1001] == 2, "buffer 1001 should rescan after changedtick update")
+  test_assert(scan_calls[1002] == 1, "buffer 1002 should keep cached levels when unchanged")
+
+  restore_all_mocks()
+end)
+
+-- Test 56: Lines containing both open+close markers should not leak level
+run_test("should not leak marker depth for lines containing both {{{ and }}}", function()
+  local fold = get_fold()
+  local lines = {
+    "; inline {{{ }}}",
+    '2025-01-01 * "txn"',
+  }
+
+  mock_buffer(lines, 1)
+  fold.foldexpr()
+  set_lnum(lines, 2)
+  test_assert(fold.foldexpr() == ">1", "transaction after inline open+close markers should stay at base level 0")
+  restore_all_mocks()
+end)
+
 -- Print summary
 print("\nTest Summary:")
 print("Tests run: " .. tests_run)
