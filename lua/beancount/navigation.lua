@@ -40,15 +40,19 @@ M.goto_account_definition = function(account)
     return
   end
 
-  -- If not found locally, search all beancount files in project
-  local files = vim.fn.glob("**/*.beancount", false, true)
-  vim.list_extend(files, vim.fn.glob("**/*.bean", false, true))
+  -- If not found locally, search all beancount files under the main file's directory
+  local utils = require("beancount.utils")
+  local main_file = utils.get_main_bean_file()
+  local search_dir = main_file ~= "" and vim.fn.fnamemodify(main_file, ":h") or vim.fn.getcwd()
+
+  local files = vim.fn.glob(search_dir .. "/**/*.beancount", false, true)
+  vim.list_extend(files, vim.fn.glob(search_dir .. "/**/*.bean", false, true))
 
   for _, file in ipairs(files) do
     local lines = vim.fn.readfile(file)
     for i, line in ipairs(lines) do
       if line:match("^%d%d%d%d%-%d%d%-%d%d%s+open%s+" .. vim.fn.escape(account, "\\.*[]^$(){}+?|")) then
-        pcall(vim.cmd, "edit " .. file)
+        pcall(vim.cmd, "edit " .. vim.fn.fnameescape(file))
         vim.fn.cursor(i, 1)
         pcall(vim.cmd, "normal! zz")
         return
@@ -82,9 +86,9 @@ M.open_include_file = function(filename)
   local full_path = current_dir .. "/" .. filename
 
   if vim.fn.filereadable(full_path) == 1 then
-    pcall(vim.cmd, "edit " .. full_path)
+    pcall(vim.cmd, "edit " .. vim.fn.fnameescape(full_path))
   elseif vim.fn.filereadable(filename) == 1 then
-    pcall(vim.cmd, "edit " .. filename)
+    pcall(vim.cmd, "edit " .. vim.fn.fnameescape(filename))
   else
     vim.notify("Include file not found: " .. filename, vim.log.levels.WARN)
   end

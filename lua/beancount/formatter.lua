@@ -224,21 +224,38 @@ M.format_posting_line = function(line_num, separator_col)
   end
 end
 
+-- Cached result of utf8 module availability check
+local _utf8_mod = nil
+local _utf8_checked = false
+
 -- Calculate display width, considering CJK characters if configured
 M.display_width = function(text)
   if config.get("fixed_cjk_width") then
-    local width = 0
-    for _, char in require("utf8").codes(text) do
-      if M.is_cjk_char(char) then
-        width = width + 2
+    if not _utf8_checked then
+      _utf8_checked = true
+      local ok, mod = pcall(require, "utf8")
+      if ok then
+        _utf8_mod = mod
       else
-        width = width + 1
+        vim.notify(
+          "beancount.nvim: fixed_cjk_width requires a Lua runtime with the 'utf8' module (Lua 5.3+). Falling back to strdisplaywidth.",
+          vim.log.levels.WARN
+        )
       end
     end
-    return width
-  else
-    return vim.fn.strdisplaywidth(text)
+    if _utf8_mod then
+      local width = 0
+      for _, char in _utf8_mod.codes(text) do
+        if M.is_cjk_char(char) then
+          width = width + 2
+        else
+          width = width + 1
+        end
+      end
+      return width
+    end
   end
+  return vim.fn.strdisplaywidth(text)
 end
 
 -- Check if character is CJK (Chinese, Japanese, Korean)
@@ -256,22 +273,13 @@ M.format_buffer = function()
   local line_count = vim.fn.line("$")
   local separator_col = config.get("separator_column")
 
-  -- Debug: track how many lines we're formatting
-  local formatted_lines = 0
-
   for line_num = 1, line_count do
     local line = vim.fn.getline(line_num)
 
     -- Format posting lines within transactions
     if M.is_posting_line(line) then
       M.format_posting_line(line_num, separator_col)
-      formatted_lines = formatted_lines + 1
     end
-  end
-
-  -- Debug: uncomment to see formatting activity
-  if formatted_lines == 0 then
-    vim.notify("No posting lines found to format", vim.log.levels.WARN)
   end
 end
 
