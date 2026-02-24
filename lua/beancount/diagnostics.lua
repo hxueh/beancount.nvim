@@ -15,6 +15,25 @@ M.setup = function()
   -- No global initialization needed
 end
 
+-- Resolve the configured Python executable path, expanding ~ and env vars.
+-- @return string: Resolved python path ready for use in jobstart
+local function resolve_python_path()
+  local python_path = config.get("python_path")
+
+  -- Handle Windows-style environment variable expansion (e.g., %PYTHON_HOME%)
+  if python_path:match("^%%") then
+    python_path = utils.resolve_env_vars(python_path)
+  end
+
+  -- Expand ~ to user home directory
+  if python_path:sub(1, 1) == "~" then
+    local home = os.getenv("HOME") or os.getenv("USERPROFILE") or ""
+    python_path = home .. python_path:sub(2)
+  end
+
+  return python_path
+end
+
 -- Run beancount validation on the main beancount file
 -- Executes the external Python script to validate syntax and generate completions
 M.check_file = function()
@@ -25,17 +44,7 @@ M.check_file = function()
 
   local plugin_dir = utils.get_plugin_dir()
   local check_script = plugin_dir .. "/pythonFiles/beancheck.py"
-  local python_path = config.get("python_path")
-
-  -- Handle environment variable expansion in python_path (e.g., %PYTHON_HOME%)
-  if python_path:match("^%%") then
-    python_path = utils.resolve_env_vars(python_path)
-  end
-
-  -- Expand ~ to user home directory in python_path
-  if python_path:sub(1, 1) == "~" then
-    python_path = os.getenv("HOME") .. python_path:sub(2)
-  end
+  local python_path = resolve_python_path()
 
   local args = { check_script, main_file }
   if config.get("complete_payee_narration") then
@@ -62,17 +71,7 @@ M.check_file_sync = function()
 
   local plugin_dir = utils.get_plugin_dir()
   local check_script = plugin_dir .. "/pythonFiles/beancheck.py"
-  local python_path = config.get("python_path")
-
-  -- Handle environment variable expansion in python_path (e.g., %PYTHON_HOME%)
-  if python_path:match("^%%") then
-    python_path = utils.resolve_env_vars(python_path)
-  end
-
-  -- Expand ~ to user home directory in python_path
-  if python_path:sub(1, 1) == "~" then
-    python_path = os.getenv("HOME") .. python_path:sub(2)
-  end
+  local python_path = resolve_python_path()
 
   local args = { check_script, main_file }
   if config.get("complete_payee_narration") then
