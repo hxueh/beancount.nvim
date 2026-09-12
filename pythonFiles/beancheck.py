@@ -1,278 +1,167 @@
-"""load beancount file and print errors"""
+"""Expose Beancount's loaded ledger to the editor without rewriting accounting data."""
 
+import argparse
+import contextlib
 import json
-import math
+import os
+import sys
 from collections import defaultdict
-from decimal import Decimal
-from sys import argv
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from beancount import loader  # type: ignore
-from beancount.core import flags  # type: ignore
-from beancount.core.data import Close, Open, Transaction  # type: ignore
-from beancount.core.display_context import Align  # type: ignore
-from beancount.core.realization import dump_balances, realize  # type: ignore
+from beancount import loader
+from beancount.core import flags
+from beancount.core.data import Close, Commodity, Open, Price, Transaction
+from beancount.core.realization import get, realize
+from beancount.parser import parser
 
 
-def get_decimal_places(tolerance: Optional[Decimal]) -> int:
-    """Get number of decimal places from tolerance value.
+def canonical(filename):
+    return os.path.realpath(os.path.abspath(filename))
 
-    Examples:
-        0.01 -> 2 (USD, CNY)
-        0.001 -> 3
-        1E-8 -> 8 (BTC)
-        1 -> 0 (JPY)
+
+def load_ledger(filename, overlays):
+    """Parse editor snapshots with original filenames and include resolution.
+
+    Only the parser input is substituted. Booking, plugins, validation and include
+    expansion remain Beancount's responsibility. Disable disk caching so editor
+    snapshots cannot read or populate a cache for different on-disk contents.
     """
-    if tolerance is None or tolerance == 0:
-        return 2  # default for most currencies
-    return max(0, -int(math.floor(math.log10(abs(float(tolerance))))))
+    original = parser.parse_file
+    original_loader = loader._load_file
 
-# Lazy initialization of reverse_flag_map
-_reverse_flag_map: Optional[Dict[str, str]] = None
+    def parse_file(path, **kwargs):
+        text = overlays.get(canonical(path)) if isinstance(path, (str, os.PathLike)) else None
+        if text is not None:
+            return parser.parse_string(text, report_filename=path)
+        return original(path, **kwargs)
+
+    # Beancount 3.2.3's initialize(False) deletes existing disk caches. Keep
+    # this private-API adapter scoped to one load instead, bypassing both cache
+    # reads and writes while preserving load_file's normal include handling.
+    loader._load_file = loader._uncached_load_file
+    parser.parse_file = parse_file
+    try:
+        return loader.load_file(filename)
+    finally:
+        parser.parse_file = original
+        loader._load_file = original_loader
 
 
-def get_reverse_flag_map() -> Dict[str, str]:
-    global _reverse_flag_map
-    if _reverse_flag_map is None:
-        _reverse_flag_map = {
-            flag_value: flag_name[5:]
-            for flag_name, flag_value in flags.__dict__.items()
-            if flag_name.startswith("FLAG_")
-        }
-    return _reverse_flag_map
+def analyze(filename, overlays, *, include_postings=False, payee_narration=True, selected_flags=None, hints_only=False):
+    entries, errors, options = load_ledger(filename, overlays)
+    accounts, commodities = {}, set(options.get("operating_currency", []))
+    payees, narrations, tags, links = set(), set(), set(), set()
+    automatics, booked = defaultdict(dict), defaultdict(dict)
+    flagged = []
+    names = {v: k[5:] for k, v in vars(flags).items() if k.startswith("FLAG_")}
 
+    def location(meta):
+        meta = meta or {}
+        source = meta.get("filename") or filename
+        return {"file": canonical(source) if not source.startswith("<") else filename,
+                "line": max(1, meta.get("lineno") or 1)}
 
-def get_flag_metadata(thing: Any) -> Dict[str, Union[str, int]]:
-    reverse_flag_map = get_reverse_flag_map()
-    # Cache frequently accessed attributes
-    meta: Dict[str, Any] = thing.meta
-    flag: str = thing.flag
-    thing_class: str = thing.__class__.__name__
+    def flag_record(entry):
+        flag = getattr(entry, "flag", None)
+        if flag and not hints_only and (selected_flags is None or flag in selected_flags):
+            flagged.append(dict(location(entry.meta), flag=flag,
+                                message=f'{type(entry).__name__} has flag {names.get(flag, flag)}'))
 
-    # More efficient attribute lookup with explicit type handling
-    help_text: str
-    if hasattr(thing, "narration") and getattr(thing, "narration", None) is not None:
-        help_text = str(getattr(thing, "narration"))
-    elif hasattr(thing, "payee") and getattr(thing, "payee", None) is not None:
-        help_text = str(getattr(thing, "payee"))
-    elif hasattr(thing, "account") and getattr(thing, "account", None) is not None:
-        help_text = str(getattr(thing, "account"))
-    else:
-        help_text = r"¯\_(ツ)_/¯"
+    for entry in entries:
+        flag_record(entry)
+        if isinstance(entry, Open):
+            commodities.update(entry.currencies or [])
+            accounts[entry.account] = dict(location(entry.meta), open=str(entry.date),
+                                          close="", currencies=entry.currencies or [], balance=[])
+        elif isinstance(entry, Close):
+            if entry.account in accounts:
+                accounts[entry.account]["close"] = str(entry.date)
+        elif isinstance(entry, Commodity):
+            commodities.add(entry.currency)
+        elif isinstance(entry, Price):
+            commodities.update((entry.currency, entry.amount.currency))
+        elif isinstance(entry, Transaction):
+            if payee_narration and not hints_only and entry.payee:
+                payees.add(entry.payee)
+            if entry.flag != flags.FLAG_PADDING:
+                if payee_narration and not hints_only:
+                    narrations.add(entry.narration)
+                tags.update(entry.tags or ())
+                links.update(entry.links or ())
+            for posting in entry.postings:
+                flag_record(posting)
+                loc = location(posting.meta)
+                file, line = loc["file"], str(loc["line"])
+                if posting.units is None:
+                    continue
+                commodities.add(posting.units.currency)
+                if posting.cost:
+                    commodities.add(posting.cost.currency)
+                if posting.price:
+                    commodities.add(posting.price.currency)
+                # One source posting can book against multiple lots. Retain every
+                # result as structured data; never turn cost into a market price.
+                if include_postings:
+                    booked[file].setdefault(line, []).append({
+                        "account": posting.account, "units": str(posting.units),
+                        "cost": str(posting.cost) if posting.cost else None,
+                        "price": str(posting.price) if posting.price else None,
+                    })
+                if posting.meta and posting.meta.get("__automatic__"):
+                    automatics[file].setdefault(line, []).append(str(posting.units))
 
+    # Autofill only needs interpolation and errors; avoid building account
+    # inventories and serializing completion history twice during a save.
+    if hints_only:
+        accounts, commodities, tags, links = {}, set(), set(), set()
+    tree = realize(entries) if not hints_only else None
+    for account, details in accounts.items():
+        node = get(tree, account)
+        if node is not None:
+            details["balance"] = sorted(str(position) for position in node.balance)
     return {
-        "file": meta["filename"],
-        "line": meta["lineno"],
-        "message": f"{thing_class} has flag {reverse_flag_map.get(flag, flag)} ({help_text})",
-        "flag": flag,
+        "version": 1, "root": canonical(filename),
+        "files": sorted({canonical(p) for p in options.get("include", [])} | {canonical(filename)}),
+        "errors": [dict(location(e.source), message=e.message) for e in errors],
+        "flags": flagged,
+        "completion": {
+            "accounts": accounts, "commodities": sorted(commodities),
+            "payees": sorted(payees), "narrations": sorted(narrations - {""}),
+            "tags": sorted(tags), "links": sorted(links),
+            "options": [{"key": "operating_currency", "value": value}
+                        for value in options.get("operating_currency", [])],
+        },
+        "hints": {"automatics": automatics, "cost_basis": {}},
+        "postings": booked,
     }
 
 
-entries, errors, options = loader.load_file(argv[1])  # type: ignore
-complete_payee_narration: bool = "--payeeNarration" in argv
-
-error_list: List[Dict[str, Union[str, int]]] = [
-    {"file": e.source["filename"], "line": e.source["lineno"], "message": e.message}  # type: ignore
-    for e in errors  # type: ignore
-]
-
-# Pre-allocate data structures with better initial capacity
-accounts: Dict[str, Dict[str, Union[str, List[str]]]] = {}
-automatics: Dict[str, Dict[int, List[str]]] = defaultdict(dict)
-cost_basis_data: Dict[str, Dict[int, str]] = defaultdict(dict)
-commodities: Set[str] = set()
-flagged_entries: List[Dict[str, Union[str, int]]] = []
-
-# Initialize collection sets
-payees: Set[str] = set()
-narrations: Set[str] = set()
-tags: Set[str] = set()
-links: Set[str] = set()
-
-for entry in entries:
-    # Check for flagged entries first (most common case)
-    if hasattr(entry, "flag") and entry.flag == "!":  # type: ignore
-        flagged_entries.append(get_flag_metadata(entry))
-
-    if isinstance(entry, Transaction):
-        # Cache entry attributes with safe access
-        entry_payee: Optional[str] = getattr(entry, "payee", None)
-        entry_narration: str = str(getattr(entry, "narration", ""))
-        entry_postings: List[Any] = getattr(entry, "postings", [])
-        entry_date: Any = getattr(entry, "date", None)
-
-        # Handle payee collection
-        if complete_payee_narration and entry_payee:
-            payees.add(entry_payee)
-
-        # Skip padding transactions for narration/tags/links
-        if not entry_narration.startswith("(Padding inserted"):
-            if complete_payee_narration and entry_narration:
-                narrations.add(entry_narration)
-            tags.update(getattr(entry, "tags", set()))
-            links.update(getattr(entry, "links", set()))
-
-        # Process postings more efficiently
-        txn_commodities: Set[str] = set()
-        postings_count: int = len(entry_postings)
-
-        for posting in entry_postings:
-            units = getattr(posting, "units", None)
-            if units is not None:
-                currency: str = str(getattr(units, "currency", ""))
-                if currency:
-                    txn_commodities.add(currency)
-
-            # Check for flagged postings
-            if hasattr(posting, "flag") and str(getattr(posting, "flag", "")) == "!":
-                flagged_entries.append(get_flag_metadata(posting))
-
-            # Handle automatic postings more efficiently
-            posting_meta: Dict[str, Any] = getattr(posting, "meta", {})
-            if posting_meta and posting_meta.get("__automatic__", False):
-                # Process all automatic postings for autofill feature
-                # Previously filtered by: postings_count > 2 or len(txn_commodities) > 1
-                filename: str = str(posting_meta.get("filename", ""))
-                lineno: int = int(posting_meta.get("lineno", 0))
-                if units is not None:
-                    amount_str: str = str(getattr(units, "to_string", lambda: "")())
-                    if lineno not in automatics[filename]:
-                        automatics[filename][lineno] = []
-                    automatics[filename][lineno].append(amount_str)
-
-            # Handle cost basis enhancement
-            cost = getattr(posting, "cost", None)
-            if cost is not None and units is not None and entry_date is not None:
-                filename: str = str(posting_meta.get("filename", ""))
-                lineno: int = int(posting_meta.get("lineno", 0))
-
-                # Extract posting components
-                quantity = getattr(units, "number", None)
-                commodity = str(getattr(units, "currency", ""))
-                cost_number = getattr(cost, "number", None)
-                cost_currency = str(getattr(cost, "currency", ""))
-                cost_date = getattr(cost, "date", None)
-
-                if quantity is not None and cost_number is not None and commodity and cost_currency:
-                    # Calculate total cost (weight) - use absolute value for @@ notation
-                    weight = abs(quantity * cost_number)
-
-                    # Format date as YYYY-MM-DD
-                    date_str = str(entry_date) if entry_date else ""
-
-                    # Build complete position string with cost basis and total cost
-                    # Format: "quantity commodity {unit_price currency, date} @@ total_cost currency"
-                    position_str = f"{quantity} {commodity}"
-
-                    # Build cost notation with date if not already present
-                    if cost_date:
-                        # Cost already has date, keep it
-                        cost_str = f"{{{cost_number} {cost_currency}, {cost_date}}}"
-                    else:
-                        # Add transaction date to cost
-                        cost_str = f"{{{cost_number} {cost_currency}, {date_str}}}"
-
-                    # Add total cost notation (use currency's inferred tolerance for precision)
-                    tolerance_map = options.get("inferred_tolerance_default", {})
-                    tolerance = tolerance_map.get(cost_currency)
-                    decimal_places = get_decimal_places(tolerance)
-                    total_cost_str = f"@@ {weight:.{decimal_places}f} {cost_currency}"
-
-                    # Combine all parts
-                    complete_position = f"{position_str} {cost_str} {total_cost_str}"
-
-                    # Store the enhanced posting data
-                    cost_basis_data[filename][lineno] = complete_position
-
-        commodities.update(txn_commodities)
-
-    elif isinstance(entry, Open):
-        account_name: str = str(getattr(entry, "account", ""))  # type: ignore
-        if account_name:
-            accounts[account_name] = {
-                "open": str(getattr(entry, "date", "")),
-                "currencies": getattr(entry, "currencies", None) or [],
-                "close": "",
-                "balance": [],
-            }
-    elif isinstance(entry, Close):
-        # Use get() method instead of try/except
-        account_name: str = str(getattr(entry, "account", ""))
-        if account_name:
-            account_data: Optional[Dict[str, Union[str, List[str]]]] = accounts.get(  # type: ignore
-                account_name
-            )
-            if account_data is not None:
-                account_data["close"] = str(getattr(entry, "date", ""))
+def main():
+    args = argparse.ArgumentParser(description=__doc__)
+    args.add_argument("filename")
+    args.add_argument("--payeeNarration", action="store_true")
+    args.add_argument("--json", action="store_true", help="Return the versioned editor response")
+    args.add_argument("--stdin", action="store_true", help="Read {filename: text} snapshots from stdin")
+    args.add_argument("--postings", action="store_true", help="Include detailed booked postings")
+    args.add_argument("--flags", default=None, help="Only return these flag characters (default: all)")
+    args.add_argument("--hints-only", action="store_true", help="Omit completion inventories for autofill")
+    opts = args.parse_args()
+    overlays = json.load(sys.stdin) if opts.stdin else {}
+    overlays = {canonical(path): text for path, text in overlays.items()}
+    # Ledger plugins may print progress; keep stdout exclusively for the protocol.
+    with contextlib.redirect_stdout(sys.stderr):
+        result = analyze(canonical(opts.filename), overlays, include_postings=opts.postings,
+                         payee_narration=opts.payeeNarration, selected_flags=opts.flags,
+                         hints_only=opts.hints_only)
+    if not opts.payeeNarration:
+        result["completion"]["payees"] = []
+        result["completion"]["narrations"] = []
+    if opts.json:
+        print(json.dumps(result, separators=(",", ":")))
+    else:
+        # Retain the old CLI format for external consumers during migration.
+        for value in (result["errors"], result["completion"], result["flags"], result["hints"]):
+            print(json.dumps(value, separators=(",", ":")))
 
 
-# More efficient balance processing using list instead of StringIO
-class BalanceCapture:
-    def __init__(self) -> None:
-        self.lines: List[str] = []
-
-    def write(self, text: str) -> None:
-        self.lines.append(text)
-
-    def get_lines(self) -> List[str]:
-        return "".join(self.lines).split("\n")
-
-
-balance_capture: BalanceCapture = BalanceCapture()
-dump_balances(
-    realize(entries),
-    options["dcontext"].build(alignment=Align.DOT, reserved=2),
-    at_cost=False,
-    fullnames=True,
-    file=balance_capture,
-)
-
-# Process balance lines more efficiently
-for line in balance_capture.get_lines():
-    if line:
-        # Use partition for more efficient string splitting
-        account_part: str
-        sep: str
-        remainder: str
-        account_part, sep, remainder = line.partition(" ")
-        if sep and remainder:
-            # Get the full balance including currency (e.g., "200 AAPL" not just "200")
-            balance_part: str = remainder.strip()
-            if balance_part:
-                account_data: Optional[Dict[str, Union[str, List[str]]]] = accounts.get(
-                    account_part
-                )
-                if account_data is not None:
-                    balance_list: List[str] = account_data["balance"]  # type: ignore
-                    balance_list.append(balance_part)
-
-# Clean up empty/None values more efficiently using set subtraction
-if complete_payee_narration:
-    payees -= {"", "None"}
-    narrations -= {"", "None"}
-else:
-    # Remove empty values for consistency even if not collecting
-    payees -= {"", "None"}
-
-# Build output dictionary more efficiently
-output: Dict[str, Any] = {
-    "accounts": accounts,
-    "commodities": list(commodities),
-    "payees": list(payees),
-    "narrations": list(narrations),
-    "tags": list(tags),
-    "links": list(links),
-}
-
-# Build result structure with automatics and cost_basis
-result: Dict[str, Any] = {
-    "automatics": automatics,
-    "cost_basis": cost_basis_data,
-}
-
-# Use separators to reduce JSON output size
-json_separators: Tuple[str, str] = (",", ":")
-print(json.dumps(error_list, separators=json_separators))
-print(json.dumps(output, separators=json_separators))
-print(json.dumps(flagged_entries, separators=json_separators))
-print(json.dumps(result, separators=json_separators))
+if __name__ == "__main__":
+    main()

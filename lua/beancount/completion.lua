@@ -2,6 +2,7 @@
 -- Provides intelligent auto-completion for beancount files including accounts,
 -- commodities, payees, dates, tags, links, and more
 local M = {}
+local syntax = require("beancount.syntax")
 
 -- Cached completion data loaded from beancount files
 -- Updated via external Python scripts that parse beancount data
@@ -66,10 +67,9 @@ M.setup_buffer = function(bufnr)
           -- Check if this space would be after an amount
           local before_space = line:sub(1, pos[2])
 
-          -- Remove trailing whitespace since we're checking the text before typing the space
-          local text_before_typing_space = before_space:gsub("%s+$", "")
-          -- Pattern: anywhere in line - account + spaces + amount at end
-          local is_after_amount = text_before_typing_space:match("[A-Za-z][a-zA-Z0-9:_-]+%s+%-?%d+%.?%d*$")
+          -- Share context detection with the provider, including signed values,
+          -- thousands separators and arithmetic expressions.
+          local is_after_amount = syntax.commodity_context(before_space)
 
           if is_after_amount then
             local ok_blink, blink = pcall(require, "blink.cmp")
@@ -96,8 +96,20 @@ M.update_data = function(json_data)
   end
 end
 
+M.activate_ledger = function()
+  local diagnostics = require("beancount.diagnostics")
+  local state = diagnostics.get_state()
+  if state then
+    M.completion_data = state.data and state.data.completion or {
+      accounts = {}, commodities = {}, payees = {}, narrations = {}, tags = {}, links = {}, options = {},
+    }
+  end
+end
+
 -- Get completion items based on context
 M.get_completion_items = function(line, col)
+  -- Resolve at use time so switching ledgers cannot reuse another root's cache.
+  M.activate_ledger()
   local items = {}
   local word_start = M.get_word_bounds(line, col)
   local word = line:sub(word_start, col - 1)
@@ -106,7 +118,7 @@ M.get_completion_items = function(line, col)
   if M.is_date_context(line, col) then
     items = M.get_date_completions(word)
   elseif M.is_account_context(line, col) then
-    items = M.get_account_completions(word)
+    items = M.get_account_completions(word, require("beancount.syntax").date_at_cursor())
   elseif M.is_commodity_context(line, col) then
     items = M.get_commodity_completions(word, line)
   elseif M.is_payee_context(line, col) then
@@ -135,6 +147,8 @@ end
 M.is_account_context = function(line, col)
   -- Look for account patterns: Assets:, Liabilities:, etc.
   local before_cursor = line:sub(1, col - 1)
+  -- Posting flags precede the account token, including partially typed names.
+  before_cursor = before_cursor:gsub("^(%s+)[A-Z*!&#?%%]%s+", "%1")
 
   -- Account completion should only trigger:
   -- 1. At start of line (after optional whitespace/tabs) - for posting lines
@@ -144,23 +158,26 @@ M.is_account_context = function(line, col)
   -- Check if we're at start of line with only whitespace/tabs before
   -- Allow partial account names: "A", "As", "Ass", "Asse", "Assets", etc.
   -- Pattern: start of line, optional whitespace/tabs, then letter + optional account chars
-  if before_cursor:match("^[ \t]*[A-Za-z][a-zA-Z0-9:_-]*$") then
+  if before_cursor:match("^[ \t]*[A-Za-z\128-\255][a-zA-Z0-9:_\128-\255%-]*$") then
     return true
   end
 
   -- Check if we're continuing an account name (already has colon)
   if
-      before_cursor:match("[A-Za-z][a-zA-Z0-9_-]*:[a-zA-Z0-9:_-]*$")
-      or before_cursor:match("[A-Za-z][a-zA-Z0-9_-]*:$")
+      before_cursor:match("[A-Za-z\128-\255][a-zA-Z0-9_-]*:[a-zA-Z0-9:_\128-\255%-]*$")
+      or before_cursor:match("[A-Za-z\128-\255][a-zA-Z0-9_-]*:$")
   then
     return true
   end
 
   -- After specific beancount directives that require accounts
   if
-      before_cursor:match("open%s+[a-zA-Z0-9:_-]*$")
-      or before_cursor:match("close%s+[a-zA-Z0-9:_-]*$")
-      or before_cursor:match("balance%s+[a-zA-Z0-9:_-]*$")
+      before_cursor:match("open%s+[a-zA-Z0-9:_\128-\255%-]*$")
+      or before_cursor:match("close%s+[a-zA-Z0-9:_\128-\255%-]*$")
+      or before_cursor:match("pad%s+[^%s]*$")
+      or before_cursor:match("note%s+[^%s]*$")
+      or before_cursor:match("document%s+[^%s]*$")
+      or before_cursor:match("balance%s+[a-zA-Z0-9:_\128-\255%-]*$")
   then
     return true
   end
@@ -169,44 +186,15 @@ M.is_account_context = function(line, col)
 end
 
 M.is_commodity_context = function(line, col)
-  -- After amounts in posting lines, typically for currencies/commodities
-  local before_cursor = line:sub(1, col - 1)
-
-  -- Use the same pattern as the space trigger: account + spaces + amount + space
-  local has_account_and_amount = before_cursor:match("[A-Za-z][a-zA-Z0-9:_-]+%s+%-?%d+%.?%d*%s+$")
-
-  return has_account_and_amount ~= nil
+  return syntax.commodity_context(line:sub(1, col - 1))
 end
 
 M.is_payee_context = function(line, col)
-  -- After transaction date and flag, first quoted string
-  local before_cursor = line:sub(1, col - 1)
-  local after_cursor = line:sub(col)
-
-  -- Check if we're right after the date/flag pattern and opening quote
-  local after_flag = before_cursor:match('%d%d%d%d%-%d%d%-%d%d%s+[%*%!]%s+"')
-
-  -- Also handle case where cursor is between auto-paired quotes
-  local between_quotes = before_cursor:match('%d%d%d%d%-%d%d%-%d%d%s+[%*%!]%s+"$') and after_cursor:match('^"')
-
-  -- Make sure we haven't completed the first quoted string yet
-  local no_completed_payee = not before_cursor:match('".+"')
-
-  return (after_flag or between_quotes) and no_completed_payee
+  return syntax.string_context(line:sub(1, col - 1)) == 1
 end
 
 M.is_narration_context = function(line, col)
-  -- After payee, second quoted string
-  local before_cursor = line:sub(1, col - 1)
-  local after_cursor = line:sub(col)
-
-  -- Check if we're after a completed payee and in the narration quote
-  local after_payee = before_cursor:match('".+"%s+"')
-
-  -- Also handle case where cursor is between auto-paired quotes for narration
-  local between_narration_quotes = before_cursor:match('".+"%s+"$') and after_cursor:match('^"')
-
-  return after_payee or between_narration_quotes
+  return syntax.string_context(line:sub(1, col - 1)) == 2
 end
 
 M.is_tag_context = function(line, col)
@@ -221,9 +209,7 @@ end
 
 -- Helper function to extract account name from current posting line
 M.get_account_on_line = function(line)
-  -- Match posting line pattern: whitespace + account + whitespace + amount
-  local account = line:match("^%s+([A-Za-z][a-zA-Z0-9:_-]+)%s+%-?%d+")
-
+  local _, account = syntax.posting(line)
   return account
 end
 
@@ -271,7 +257,7 @@ M.get_word_bounds = function(line, col)
   local word_start = col
 
   -- Find start of word
-  while word_start > 1 and line:sub(word_start - 1, word_start - 1):match("[A-Za-z0-9:_-]") do
+  while word_start > 1 and line:sub(word_start - 1, word_start - 1):match("[A-Za-z0-9:_\128-\255%-]") do
     word_start = word_start - 1
   end
 
@@ -346,7 +332,7 @@ M.get_date_completions = function(prefix)
   return items
 end
 
-M.get_account_completions = function(prefix)
+M.get_account_completions = function(prefix, date)
   local items = {}
 
   -- Handle nil prefix
@@ -375,6 +361,11 @@ M.get_account_completions = function(prefix)
       end
     end
 
+    -- Historical transactions may use an account which has since closed.
+    if date then
+      if details.open and details.open ~= "" and date < details.open then should_include = false end
+      if details.close and details.close ~= "" and date >= details.close then should_include = false end
+    else
     -- Skip closed accounts unless they have a balance (might still be relevant)
     if should_include and details.close and details.close ~= "" then
       -- Only include closed accounts if they have a non-zero balance
@@ -394,6 +385,8 @@ M.get_account_completions = function(prefix)
           should_include = false
         end
       end
+    end
+
     end
 
     if should_include then
@@ -450,7 +443,7 @@ M.get_commodity_completions = function(prefix, line)
 
   -- Second priority: operating currencies from options
   if not available_currencies then
-    available_currencies = M.get_operating_currencies()
+    available_currencies = M.completion_data.commodities
   end
 
   -- Third priority: all commodities
@@ -559,7 +552,7 @@ M.hover = function(bufnr, line, col)
   local word = line_text:sub(word_start, word_end - 1)
 
   -- Check if it's an account and we have hover info
-  if word:match("^[A-Z][a-zA-Z0-9:_-]*$") and M.completion_data.accounts[word] then
+  if word:match("^[A-Z][a-zA-Z0-9:_\128-\255%-]*$") and M.completion_data.accounts[word] then
     return M.get_account_hover(word)
   end
 
@@ -572,12 +565,12 @@ M.get_word_bounds_at_pos = function(line, pos)
   local word_end = pos
 
   -- Find start of word
-  while word_start > 1 and line:sub(word_start - 1, word_start - 1):match("[A-Za-z0-9:_-]") do
+  while word_start > 1 and line:sub(word_start - 1, word_start - 1):match("[A-Za-z0-9:_\128-\255%-]") do
     word_start = word_start - 1
   end
 
   -- Find end of word
-  while word_end <= #line and line:sub(word_end, word_end):match("[A-Za-z0-9:_-]") do
+  while word_end <= #line and line:sub(word_end, word_end):match("[A-Za-z0-9:_\128-\255%-]") do
     word_end = word_end + 1
   end
 
@@ -623,6 +616,7 @@ end
 
 -- Show hover information
 M.show_hover = function()
+  M.activate_ledger()
   local pos = vim.api.nvim_win_get_cursor(0)
   local line = pos[1] - 1 -- Convert to 0-based
   local col = pos[2]      -- Already 0-based

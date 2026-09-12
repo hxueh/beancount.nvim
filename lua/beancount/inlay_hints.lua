@@ -94,7 +94,15 @@ M.render_hints = function(bufnr)
   end
 
   local filename = vim.api.nvim_buf_get_name(bufnr)
-  local file_automatics = M.automatics[filename]
+  filename = vim.loop.fs_realpath(filename) or filename
+  local diagnostics = require("beancount.diagnostics")
+  local state = diagnostics.get_state(bufnr)
+  local automatics = M.automatics
+  if state and state.data then
+    local json = diagnostics.get_hints_data(bufnr)
+    automatics = json and vim.json.decode(json).automatics or {}
+  end
+  local file_automatics = automatics[filename]
 
   if not file_automatics then
     return

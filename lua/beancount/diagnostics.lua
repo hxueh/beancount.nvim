@@ -1,234 +1,253 @@
--- Beancount diagnostics module
--- Handles error checking and validation using the external beancheck.py script
--- Displays errors, warnings, and flag-based diagnostics in Neovim
-local M = {}
-
+-- Keep validation results attached to their ledger and editor revision. A slow
+-- process must never replace a newer result or clear another ledger's errors.
+local M = { states = {} }
 local utils = require("beancount.utils")
 local config = require("beancount.config")
+M.namespace = vim.api.nvim_create_namespace("beancount-diagnostics")
 
--- Create diagnostic namespace for Neovim's diagnostic system
-local namespace = vim.api.nvim_create_namespace("beancount-diagnostics")
-
--- Initialize the diagnostics module
--- Currently no global setup required
-M.setup = function()
-  -- No global initialization needed
+local function canonical(path)
+  return vim.loop.fs_realpath(path) or vim.fn.fnamemodify(path, ":p")
 end
 
--- Run beancount validation on the main beancount file
--- Executes the external Python script to validate syntax and generate completions
-M.check_file = function()
-  local main_file = utils.get_main_bean_file()
-  if main_file == "" or not utils.file_exists(main_file) then
-    return
+function M.get_state(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(buf) then return nil end
+  local root = vim.api.nvim_buf_call(buf, utils.get_main_bean_file)
+  if root == "" then return nil end
+  root = canonical(root)
+  if not M.states[root] then
+    M.states[root] = { root = root, generation = 0, pending = 0, buffers = {}, files = {} }
   end
+  return M.states[root]
+end
 
-  local plugin_dir = utils.get_plugin_dir()
-  local check_script = plugin_dir .. "/pythonFiles/beancheck.py"
-  local python_path = utils.get_python_path()
-
-  local args = { check_script, main_file }
-  if config.get("complete_payee_narration") then
-    table.insert(args, "--payeeNarration")
-  end
-
-  utils.run_cmd(python_path, args, function(stdout, stderr, exit_code)
-    if exit_code == 0 and stdout then
-      M.process_diagnostics(stdout)
-    else
-      vim.notify("Beancount check failed: " .. (stderr or "Unknown error"), vim.log.levels.ERROR)
+-- Include all loaded snapshots: the official loader chooses which files belong
+-- to this root, including files outside its directory and symlink aliases.
+local function snapshots()
+  local texts, ticks = {}, {}
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "beancount" then
+      local name = vim.api.nvim_buf_get_name(buf)
+      if name ~= "" then
+        texts[canonical(name)] = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n") .. "\n"
+        ticks[buf] = vim.api.nvim_buf_get_changedtick(buf)
+      end
     end
-  end)
+  end
+  return texts, ticks
 end
 
--- Run beancount validation synchronously and return automatics data
--- Used by autofill module to get fresh data before saving
--- @return table|nil: Parsed automatics data or nil on failure
-M.check_file_sync = function()
-  local main_file = utils.get_main_bean_file()
-  if main_file == "" or not utils.file_exists(main_file) then
-    return nil
+local function decode(output)
+  local ok, data = pcall(vim.json.decode, output or "")
+  if not ok or type(data) ~= "table" or data.version ~= 1 or type(data.root) ~= "string" then return nil end
+  for _, key in ipairs({ "files", "errors", "flags", "completion", "hints", "postings" }) do
+    if type(data[key]) ~= "table" then return nil end
   end
-
-  local plugin_dir = utils.get_plugin_dir()
-  local check_script = plugin_dir .. "/pythonFiles/beancheck.py"
-  local python_path = utils.get_python_path()
-
-  local args = { check_script, main_file }
-  if config.get("complete_payee_narration") then
-    table.insert(args, "--payeeNarration")
+  for _, key in ipairs({ "accounts", "commodities", "payees", "narrations", "tags", "links", "options" }) do
+    if type(data.completion[key]) ~= "table" then return nil end
   end
-
-  local stdout, exit_code = utils.run_cmd_sync(python_path, args)
-  if exit_code ~= 0 or not stdout then
-    return nil
+  for name, account in pairs(data.completion.accounts) do
+    if type(name) ~= "string" or type(account) ~= "table" or type(account.file) ~= "string"
+      or type(account.line) ~= "number" or type(account.balance) ~= "table"
+      or type(account.currencies) ~= "table" then return nil end
   end
-
-  local lines = vim.split(stdout, "\n", { plain = true })
-  if #lines < 4 then
-    return nil
-  end
-
-  local hints_json = lines[4]
-  local ok, automatics = pcall(vim.json.decode, hints_json)
-  if ok and automatics then
-    return automatics
-  end
-
-  return nil
-end
-
--- Process the multi-line JSON output from beancheck.py
--- @param output string: Multi-line output containing errors, completions, flags, and hints
-M.process_diagnostics = function(output)
-  local lines = vim.split(output, "\n", { plain = true })
-  if #lines < 4 then
-    return
-  end
-
-  local errors_json = lines[1]
-  local completions_json = lines[2]
-  local flags_json = lines[3]
-  local hints_json = lines[4]
-
-  -- Parse and display validation errors
-  local ok, errors = pcall(vim.json.decode, errors_json)
-  if ok and errors then
-    M.show_errors(errors)
-  end
-
-  -- Parse and display flag-based warnings
-  local flags_ok, flags = pcall(vim.json.decode, flags_json)
-  if flags_ok and flags then
-    M.show_flags(flags)
-  end
-
-  -- Update completion module with latest data from beancount files
-  M.completion_data = completions_json
-  local completion = require("beancount.completion")
-  completion.update_data(completions_json)
-
-  -- Update inlay hints module with automatic posting data
-  M.hints_data = hints_json
-  local inlay_hints = require("beancount.inlay_hints")
-  inlay_hints.update_data(hints_json)
-
-  -- Update autofill module with automatic posting data
-  local autofill = require("beancount.autofill")
-  autofill.update_data(hints_json)
-end
-
--- Display validation errors in Neovim's diagnostic system
--- @param errors table: Array of error objects with file, line, message
-M.show_errors = function(errors)
-  local diagnostics_by_file = {}
-
-  for _, error in ipairs(errors) do
-    local file = error.file
-    local line = (error.line or 1) - 1 -- Convert to 0-based indexing, default to line 1
-    local message = error.message or "Unknown error"
-
-    if not diagnostics_by_file[file] then
-      diagnostics_by_file[file] = {}
+  if type(data.hints.automatics) ~= "table" then return nil end
+  for _, file in ipairs(data.files) do if type(file) ~= "string" then return nil end end
+  for _, records in ipairs({ data.errors, data.flags }) do
+    for _, record in ipairs(records) do
+      if type(record) ~= "table" or type(record.file) ~= "string" or type(record.line) ~= "number"
+        or type(record.message) ~= "string" then return nil end
     end
+  end
+  for file, lines in pairs(data.hints.automatics) do
+    if type(file) ~= "string" or type(lines) ~= "table" then return nil end
+    for line, amounts in pairs(lines) do
+      if not tonumber(line) or type(amounts) ~= "table" then return nil end
+      for _, amount in ipairs(amounts) do if type(amount) ~= "string" then return nil end end
+    end
+  end
+  return data
+end
+M.decode = decode
 
-    table.insert(diagnostics_by_file[file], {
-      lnum = math.max(line, 0),
-      end_lnum = math.max(line, 0),
-      col = 0,
-      end_col = -1,
-      message = message,
-      severity = vim.diagnostic.severity.ERROR,
-      source = "Beancount",
+local function current(ticks, files)
+  local included = {}
+  for _, file in ipairs(files) do included[canonical(file)] = true end
+  for buf, tick in pairs(ticks) do
+    if not vim.api.nvim_buf_is_valid(buf) then return false end
+    if included[canonical(vim.api.nvim_buf_get_name(buf))]
+      and vim.api.nvim_buf_get_changedtick(buf) ~= tick then return false end
+  end
+  return true
+end
+
+function M.show_errors(errors, files)
+  local by_file = {}
+  for _, file in ipairs(files or {}) do by_file[file] = {} end
+  for _, err in ipairs(errors) do
+    by_file[err.file] = by_file[err.file] or {}
+    table.insert(by_file[err.file], {
+      lnum = math.max((err.line or 1) - 1, 0), col = 0,
+      message = err.message, severity = vim.diagnostic.severity.ERROR, source = "Beancount",
     })
   end
-
-  -- Clear any existing diagnostics before setting new ones
-  vim.diagnostic.reset(namespace)
-
-  -- Apply diagnostics to each file that has errors
-  for file, file_diagnostics in pairs(diagnostics_by_file) do
-    if utils.file_exists(file) then
-      local bufnr = vim.fn.bufnr(file)
-      if bufnr ~= -1 then
-        vim.diagnostic.set(namespace, bufnr, file_diagnostics)
-      end
-    end
+  for file, records in pairs(by_file) do
+    local buf = vim.fn.bufnr(file)
+    if buf ~= -1 then vim.diagnostic.set(M.namespace, buf, records) end
   end
 end
 
--- Display flag-based warnings in Neovim's diagnostic system
--- @param flags table: Array of flag objects with file, line, flag, message
-M.show_flags = function(flags)
-  local flag_warnings = config.get("flag_warnings")
-  local diagnostics_by_file = {}
-
+function M.show_flags(flags)
   for _, flag in ipairs(flags) do
-    local warning_type = flag_warnings[flag.flag]
-    if warning_type then
-      local file = flag.file
-      local line = flag.line - 1 -- Convert to 0-based indexing
-      local message = flag.message
-
-      if not diagnostics_by_file[file] then
-        diagnostics_by_file[file] = {}
-      end
-
-      local severity = vim.diagnostic.severity.WARN
-      if warning_type == 1 then
-        severity = vim.diagnostic.severity.WARN
-      elseif warning_type == 2 then
-        severity = vim.diagnostic.severity.INFO
-      elseif warning_type == 3 then
-        severity = vim.diagnostic.severity.HINT
-      end
-
-      table.insert(diagnostics_by_file[file], {
-        lnum = math.max(line, 0),
-        end_lnum = math.max(line, 0),
-        col = 0,
-        end_col = -1,
-        message = message,
-        severity = severity,
-        source = "Beancount",
-        user_data = {
-          flag = flag.flag,
-        },
-      })
-    end
-  end
-
-  -- Merge flag warnings with existing error diagnostics
-  for file, file_diagnostics in pairs(diagnostics_by_file) do
-    if utils.file_exists(file) then
-      local bufnr = vim.fn.bufnr(file)
-      if bufnr ~= -1 then
-        local existing = vim.diagnostic.get(bufnr, { namespace = namespace })
-        vim.list_extend(existing, file_diagnostics)
-        vim.diagnostic.set(namespace, bufnr, existing)
-      end
+    local severity = config.get("flag_warnings")[flag.flag]
+    local buf = vim.fn.bufnr(flag.file)
+    if type(severity) == "number" and severity >= 1 and severity <= 4 and buf ~= -1 then
+      local records = vim.diagnostic.get(buf, { namespace = M.namespace })
+      table.insert(records, { lnum = math.max(flag.line - 1, 0), col = 0, message = flag.message,
+        severity = severity, source = "Beancount", user_data = { flag = flag.flag } })
+      vim.diagnostic.set(M.namespace, buf, records)
     end
   end
 end
 
--- Refresh diagnostics with a small delay
--- Called after file saves to re-validate the beancount files
-M.refresh = function()
+function M.process_diagnostics(output, state, ticks)
+  local data = decode(output)
+  if not data then return false end
+  state = state or M.get_state()
+  if not state or canonical(data.root) ~= state.root then return false end
+  if ticks and not current(ticks, data.files) then return false end
+  local files = vim.list_extend(vim.deepcopy(state.files), data.files)
+  state.data, state.files, state.ticks = data, data.files, ticks or select(2, snapshots())
+  M.show_errors(data.errors, files)
+  M.show_flags(data.flags)
+  require("beancount.inlay_hints").update_visible_buffers()
+  return true
+end
+
+local function command(state, hints_only)
+  local args = { utils.get_plugin_dir() .. "/pythonFiles/beancheck.py", state.root, "--json", "--stdin" }
+  if hints_only then
+    table.insert(args, "--hints-only")
+  elseif config.get("complete_payee_narration") then
+    table.insert(args, "--payeeNarration")
+  end
+  -- Default OK flags and booked postings can dwarf the useful editor response.
+  local selected = {}
+  for flag, severity in pairs(config.get("flag_warnings") or {}) do
+    if type(severity) == "number" and severity >= 1 and severity <= 4 then table.insert(selected, flag) end
+  end
+  vim.list_extend(args, { "--flags", table.concat(selected) })
+  return utils.get_python_path(), args
+end
+
+function M.check_file()
+  local buf = vim.api.nvim_get_current_buf()
+  local state = M.get_state(buf)
+  if not state or not utils.file_exists(state.root) then return end
+  state.generation = state.generation + 1
+  -- Keep only the newest request while a ledger is loading. Snapshots are taken
+  -- when the queued job starts, so intermediate edits never build up a backlog.
+  if state.running or state.sync then state.queued = buf; return end
+  state.queued = nil
+  local generation = state.generation
+  local texts, ticks = snapshots()
+  local python, args = command(state)
+  local running = {}
+  state.running = running
+  running.id = utils.run_cmd(python, args, function(stdout, stderr, code)
+    if state.running == running then state.running = nil end
+    if state.generation == generation then
+      if code ~= 0 then
+        vim.notify("Beancount check failed: " .. stderr, vim.log.levels.ERROR)
+      elseif not M.process_diagnostics(stdout, state, ticks) and current(ticks, state.files) then
+        vim.notify("Beancount returned an invalid or mismatched response", vim.log.levels.ERROR)
+      end
+    end
+    local queued, pending = state.queued, state.pending
+    state.queued = nil
+    if queued and not state.sync and vim.api.nvim_buf_is_valid(queued) then
+      vim.schedule(function()
+        if state.pending == pending and vim.api.nvim_buf_is_valid(queued) and not state.running then
+          vim.api.nvim_buf_call(queued, M.check_file)
+        end
+      end)
+    end
+  end, { stdin = vim.json.encode(texts), timeout_ms = config.get("validation_timeout_ms") })
+end
+
+-- Used for both inference and candidate validation. Neither operation writes
+-- ledger files; errors prevent autofill from applying any proposed changes.
+function M.check_file_sync(overrides)
+  local state = M.get_state()
+  if not state or not utils.file_exists(state.root) then return nil end
+  local texts, ticks = snapshots()
+  for path, text in pairs(overrides or {}) do texts[canonical(path)] = text end
+  -- A save supersedes background work. Reap that process before starting the
+  -- synchronous validator so the same ledger never has two loaders running.
+  state.sync = true
+  state.generation, state.pending = state.generation + 1, state.pending + 1
+  state.queued = nil
+  if state.running and state.running.id and state.running.id > 0 then
+    vim.fn.jobstop(state.running.id)
+    local status = vim.fn.jobwait({ state.running.id }, 1000)[1]
+    if status == -1 then
+      state.sync = false
+      vim.notify("Beancount could not stop background validation", vim.log.levels.ERROR)
+      return nil
+    end
+    state.running = nil
+  end
+  local python, args = command(state, true)
+  local output, code, stderr = utils.run_cmd_sync(python, args, vim.json.encode(texts),
+    config.get("validation_timeout_ms"))
+  state.sync = false
+  if code ~= 0 then
+    vim.notify("Beancount autofill check failed: " .. (stderr or "unknown process error"), vim.log.levels.ERROR)
+    return nil
+  end
+  local data = code == 0 and decode(output) or nil
+  if not data or canonical(data.root) ~= state.root then
+    vim.notify("Beancount autofill received an invalid or mismatched response", vim.log.levels.ERROR)
+    return nil
+  end
+  -- jobwait processes callbacks; never apply inference if a callback changed
+  -- any included buffer while the synchronous validator was running.
+  if not current(ticks, data.files) or #data.errors > 0 then return nil end
+  return data.hints
+end
+
+function M.refresh(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  local state = M.get_state(buf)
+  if not state then return end
+  state.pending = state.pending + 1
+  state.generation = state.generation + 1 -- Invalidate results before the debounce expires.
+  state.queued = nil -- A newer edit must finish its debounce before being loaded.
+  local pending = state.pending
   vim.defer_fn(function()
-    M.check_file()
-  end, 100) -- Delay ensures file write operations complete before validation
+    if state.pending == pending and vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_call(buf, M.check_file)
+    end
+  end, config.get("validation_debounce_ms"))
 end
 
--- Get the cached completion data
--- @return string: JSON string with completion data
-M.get_completion_data = function()
-  return M.completion_data
+function M.get_completion_data()
+  local state = M.get_state()
+  return state and state.data and vim.json.encode(state.data.completion) or nil
 end
 
--- Get the cached inlay hints data
--- @return string: JSON string with automatic posting data
-M.get_hints_data = function()
-  return M.hints_data
+function M.get_hints_data(buf)
+  local state = M.get_state(buf)
+  if state and state.data and current(state.ticks, state.files) then
+    return vim.json.encode(state.data.hints)
+  end
 end
 
+function M.setup()
+  local group = vim.api.nvim_create_augroup("BeancountValidation", { clear = true })
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+    group = group, pattern = { "*.bean", "*.beancount", "*.bean.oneline", "*.beancount.oneline" },
+    callback = function(args) M.refresh(args.buf) end,
+  })
+end
 return M

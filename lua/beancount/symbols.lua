@@ -64,7 +64,7 @@ M.parse_line_for_symbol = function(line, line_num)
 
   -- Parse transaction lines (YYYY-MM-DD * "Payee" "Narration")
   -- Handle properly quoted strings and unquoted strings
-  local date, flag, rest = line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+([*!])%s*(.*)")
+  local date, flag, rest = require("beancount.syntax").transaction(line)
   local payee, narration
   if rest then
     -- Try to match quoted payee and narration first
@@ -107,7 +107,7 @@ M.parse_line_for_symbol = function(line, line_num)
   end
 
   -- Parse account opening directives
-  local open_date, account, currencies = line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+open%s+([A-Za-z0-9:_-]+)%s*(.*)")
+  local open_date, account, currencies = line:match("^(%d%d%d%d[%-/]%d%d[%-/]%d%d)%s+open%s+([^%s]+)%s*(.*)")
   if open_date and account then
     local detail = "Open account"
     if currencies and currencies ~= "" then
@@ -130,7 +130,7 @@ M.parse_line_for_symbol = function(line, line_num)
   end
 
   -- Parse account closing directives
-  local close_date, close_account = line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+close%s+([A-Za-z0-9:_-]+)")
+  local close_date, close_account = line:match("^(%d%d%d%d[%-/]%d%d[%-/]%d%d)%s+close%s+([^%s]+)")
   if close_date and close_account then
     return {
       name = close_account,
@@ -148,7 +148,7 @@ M.parse_line_for_symbol = function(line, line_num)
   end
 
   -- Parse commodity definition directives
-  local commodity_date, commodity = line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+commodity%s+([A-Za-z0-9_-]+)")
+  local commodity_date, commodity = line:match("^(%d%d%d%d[%-/]%d%d[%-/]%d%d)%s+commodity%s+([A-Za-z0-9_-]+)")
   if commodity_date and commodity then
     return {
       name = commodity,
@@ -167,7 +167,7 @@ M.parse_line_for_symbol = function(line, line_num)
 
   -- Parse price definition directives
   local price_date, price_commodity, price_amount, price_currency =
-    line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+price%s+([A-Za-z0-9_-]+)%s+([0-9.]+)%s+([A-Za-z0-9_-]+)")
+    line:match("^(%d%d%d%d[%-/]%d%d[%-/]%d%d)%s+price%s+([A-Za-z0-9_-]+)%s+([0-9.]+)%s+([A-Za-z0-9_-]+)")
   if price_date and price_commodity then
     return {
       name = string.format("%s @ %s %s", price_commodity, price_amount or "", price_currency or ""),
@@ -186,7 +186,7 @@ M.parse_line_for_symbol = function(line, line_num)
 
   -- Parse balance assertion directives
   local balance_date, balance_account, balance_amount =
-    line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+balance%s+([A-Za-z0-9:_-]+)%s+([0-9.-]+%s+[A-Za-z0-9_-]+)")
+    line:match("^(%d%d%d%d[%-/]%d%d[%-/]%d%d)%s+balance%s+([^%s]+)%s+([0-9.-]+%s+[A-Za-z0-9_-]+)")
   if balance_date and balance_account then
     return {
       name = string.format("%s: %s", balance_account, balance_amount or ""),
@@ -259,7 +259,7 @@ M.parse_line_for_symbol = function(line, line_num)
 
   -- Parse pad directives
   local pad_date, pad_account, pad_source =
-    line:match("^(%d%d%d%d%-%d%d%-%d%d)%s+pad%s+([A-Za-z0-9:_-]+)%s+([A-Za-z0-9:_-]+)")
+    line:match("^(%d%d%d%d[%-/]%d%d[%-/]%d%d)%s+pad%s+([^%s]+)%s+([^%s]+)")
   if pad_date and pad_account and pad_source then
     return {
       name = string.format("%s <- %s", pad_account, pad_source),
@@ -277,9 +277,9 @@ M.parse_line_for_symbol = function(line, line_num)
   end
 
   -- Parse event directives
-  local event_date, event_type = line:match('^(%d%d%d%d%-%d%d%-%d%d)%s+event%s+"([^"]+)"')
+  local event_date, event_type = line:match('^(%d%d%d%d[%-/]%d%d[%-/]%d%d)%s+event%s+"([^"]+)"')
   if event_date and event_type then
-    local event_description = line:match('^%d%d%d%d%-%d%d%-%d%d%s+event%s+"[^"]+"%s+"([^"]*)"') or ""
+    local event_description = line:match('^%d%d%d%d[%-/]%d%d[%-/]%d%d%s+event%s+"[^"]+"%s+"([^"]*)"') or ""
     return {
       name = event_type,
       detail = "Event: " .. event_description,

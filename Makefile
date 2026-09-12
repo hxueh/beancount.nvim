@@ -39,8 +39,10 @@ test:
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/indentation_test.lua"
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/formatter_test.lua"
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/regression_test.lua"
+	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/validation_test.lua"
+	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/syntax_test.lua"
 	@echo "Running Python tests..."
-	@"$(PYTHON)" -m unittest tests/beancheck_test.py
+	@"$(PYTHON)" -m unittest discover -s tests -p '*_test.py'
 
 # Run linter
 lint:

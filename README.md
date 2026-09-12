@@ -84,7 +84,8 @@ require("beancount").setup({
     ["C"] = nil,                           -- FLAG_CONVERSIONS - Transactions created to account for price conversions
     ["M"] = nil,                           -- FLAG_MERGING - A flag to mark postings merging together legs for average cost
   },
-  auto_save_before_check = true, -- Auto-save before diagnostics
+  validation_debounce_ms = 250, -- Wait after edits before checking
+  validation_timeout_ms = 10000, -- Timeout for each check, including autofill
 
   -- Features
   inlay_hints = true,           -- Show inferred amounts
@@ -167,7 +168,17 @@ require("beancount").setup({
 
 **Note:** When `auto_fill_amounts` is enabled, inlay hints are automatically disabled to avoid showing redundant information since amounts are being filled directly.
 
-**Performance Note:** Auto-fill runs synchronous validation on each save to ensure accurate detection of newly added transactions. For very large beancount files, this may cause a brief UI pause during save. This tradeoff ensures correct behavior when saving new transactions for the first time.
+**Validation performance:** Background checks allow one running process and one
+pending request per ledger. `validation_debounce_ms` controls the delay after
+editing, and `validation_timeout_ms` limits each process. Outdated results are
+discarded. Editor snapshots do not read, overwrite, or delete ledger disk caches.
+
+Autofill skips validation when there are no omitted units. Otherwise it performs
+up to two synchronous checks: one to infer amounts and one to
+validate the proposed changes. Each has the configured timeout, so a large ledger
+can still pause a save. These checks request only errors and inferred amounts;
+background checks omit detailed booked postings and unconfigured flags. Process
+failures are reported, and failed checks leave inferred amounts unapplied.
 
 ### Navigation
 

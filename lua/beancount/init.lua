@@ -44,8 +44,8 @@ M.setup = function(opts)
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = augroup,
     pattern = { "*.beancount", "*.bean", "*.beancount.oneline", "*.bean.oneline" },
-    callback = function()
-      diagnostics.refresh()
+    callback = function(args)
+      diagnostics.refresh(args.buf)
     end,
   })
 

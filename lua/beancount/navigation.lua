@@ -10,53 +10,28 @@ M.links = {}
 -- Main go-to-definition function
 -- Handles accounts (goto open directive) and include statements (goto file)
 M.goto_definition = function()
-  local word = vim.fn.expand("<cword>")
   local line = vim.fn.getline(".")
-
-  -- Handle account name navigation to open directive
-  if word:match("^[A-Z][a-zA-Z0-9:_-]*$") then
-    M.goto_account_definition(word)
-    -- Handle include statement navigation to file
-  elseif line:match('include%s+"[^"]*"') then
-    M.goto_include_file(line)
-  end
+  if line:match('^%s*include%s+"') then return M.goto_include_file(line) end
+  local account = require("beancount.syntax").account_at(line, vim.fn.col("."))
+  if account then M.goto_account_definition(account) end
 end
 
--- Navigate to the open directive for an account
--- @param account string: Account name to find
 M.goto_account_definition = function(account)
-  if not account or account == "" then
-    vim.notify("No account specified", vim.log.levels.WARN)
+  if not account or account == "" then return end
+  -- Unsaved local definitions are immediately navigable; compare full tokens.
+  for row, line in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do
+    local name = line:match("^%d%d%d%d[%-/]%d%d[%-/]%d%d%s+open%s+(%S+)")
+    if name == account then vim.api.nvim_win_set_cursor(0, { row, 0 }); return end
+  end
+  local json = require("beancount.diagnostics").get_completion_data()
+  local data = json and vim.json.decode(json)
+  local entry = data and data.accounts[account]
+  if entry and entry.file and entry.line then
+    vim.cmd("edit " .. vim.fn.fnameescape(entry.file))
+    vim.api.nvim_win_set_cursor(0, { entry.line, 0 })
     return
   end
-  -- Create search pattern for account's open directive
-  local search_pattern = "\\v^\\d{4}-\\d{2}-\\d{2}\\s+open\\s+" .. vim.fn.escape(account, "\\.*[]^$(){}+?|")
-
-  -- Search in current buffer first for performance
-  local pos = vim.fn.search(search_pattern, "nw")
-  if pos > 0 then
-    vim.fn.cursor(pos, 1)
-    pcall(vim.cmd, "normal! zz")
-    return
-  end
-
-  -- If not found locally, search all beancount files in project
-  local files = vim.fn.glob("**/*.beancount", false, true)
-  vim.list_extend(files, vim.fn.glob("**/*.bean", false, true))
-
-  for _, file in ipairs(files) do
-    local lines = vim.fn.readfile(file)
-    for i, line in ipairs(lines) do
-      if line:match("^%d%d%d%d%-%d%d%-%d%d%s+open%s+" .. vim.fn.escape(account, "\\.*[]^$(){}+?|")) then
-        pcall(vim.cmd, "edit " .. file)
-        vim.fn.cursor(i, 1)
-        pcall(vim.cmd, "normal! zz")
-        return
-      end
-    end
-  end
-
-  vim.notify("Account definition not found: " .. account, vim.log.levels.WARN)
+  vim.notify("Account definition unavailable; wait for ledger validation: " .. account, vim.log.levels.WARN)
 end
 
 -- Extract include filename from line and navigate to it
@@ -77,17 +52,15 @@ M.open_include_file = function(filename)
     return
   end
 
-  -- Try relative to current file's directory first
-  local current_dir = vim.fn.expand("%:h")
-  local full_path = current_dir .. "/" .. filename
-
-  if vim.fn.filereadable(full_path) == 1 then
-    pcall(vim.cmd, "edit " .. full_path)
-  elseif vim.fn.filereadable(filename) == 1 then
-    pcall(vim.cmd, "edit " .. filename)
-  else
-    vim.notify("Include file not found: " .. filename, vim.log.levels.WARN)
+  local current_dir = vim.fn.expand("%:p:h")
+  local full_path = filename:match("^/") and filename or current_dir .. "/" .. filename
+  local matches = vim.fn.glob(full_path, false, true)
+  local function open(path)
+    if path then vim.cmd("edit " .. vim.fn.fnameescape(path)) end
   end
+  if #matches == 1 then open(matches[1])
+  elseif #matches > 1 then vim.ui.select(matches, { prompt = "Included file:" }, open)
+  else vim.notify("Include file not found: " .. filename, vim.log.levels.WARN) end
 end
 
 -- List all known accounts in quickfix window
@@ -105,8 +78,8 @@ M.list_accounts = function()
       for account, details in pairs(data.accounts) do
         table.insert(accounts, {
           text = account,
-          filename = vim.fn.expand("%"),
-          lnum = 1,
+          filename = details.file,
+          lnum = details.line or 1,
           col = 1,
           type = "account",
           info = details.open and ("Opened: " .. details.open) or "",
@@ -124,16 +97,18 @@ M.list_accounts = function()
 end
 
 -- Navigate to the next transaction in the current buffer
-M.next_transaction = function()
-  local pattern = "^\\d\\{4\\}-\\d\\{2\\}-\\d\\{2\\}\\s\\+[*!]"
-  vim.fn.search(pattern)
+local function move_transaction(direction)
+  local count, start = vim.fn.line("$"), vim.fn.line(".")
+  for offset = 1, count do
+    local row = ((start - 1 + direction * offset) % count) + 1
+    if require("beancount.syntax").transaction(vim.fn.getline(row)) then
+      vim.api.nvim_win_set_cursor(0, { row, 0 })
+      return
+    end
+  end
 end
-
--- Navigate to the previous transaction in the current buffer
-M.prev_transaction = function()
-  local pattern = "^\\d\\{4\\}-\\d\\{2\\}-\\d\\{2\\}\\s\\+[*!]"
-  vim.fn.search(pattern, "b")
-end
+M.next_transaction = function() move_transaction(1) end
+M.prev_transaction = function() move_transaction(-1) end
 
 -- Find all document links (include statements) in a buffer
 -- @param bufnr number: Buffer to search for links
@@ -144,33 +119,13 @@ M.find_document_links = function(bufnr)
   local links = {}
 
   for line_num, line in ipairs(lines) do
-    -- Look for include statements with .beancount extension
-    for filename in line:gmatch('include%s+"([^"]+%.beancount)"') do
-      local start_pos = line:find('"' .. vim.fn.escape(filename, "\\.*[]^$(){}+?|") .. '"')
-      if start_pos then
-        table.insert(links, {
-          range = {
-            start = { line = line_num - 1, character = start_pos - 1 },
-            ["end"] = { line = line_num - 1, character = start_pos + #filename + 1 },
-          },
-          target = filename,
-          tooltip = "Follow link to " .. filename,
-        })
-      end
-    end
-    -- Also look for include statements with .bean extension
-    for filename in line:gmatch('include%s+"([^"]+%.bean)"') do
-      local start_pos = line:find('"' .. vim.fn.escape(filename, "\\.*[]^$(){}+?|") .. '"')
-      if start_pos then
-        table.insert(links, {
-          range = {
-            start = { line = line_num - 1, character = start_pos - 1 },
-            ["end"] = { line = line_num - 1, character = start_pos + #filename + 1 },
-          },
-          target = filename,
-          tooltip = "Follow link to " .. filename,
-        })
-      end
+    local start, filename = line:match('^%s*include%s+()"([^"]+)"')
+    if filename then
+      table.insert(links, {
+        range = { start = { line = line_num - 1, character = start - 1 },
+          ["end"] = { line = line_num - 1, character = start + #filename + 1 } },
+        target = filename, tooltip = "Follow link to " .. filename,
+      })
     end
   end
 
@@ -268,14 +223,6 @@ M.setup_buffer = function(bufnr)
 end
 
 -- Initialize the navigation module globally
-M.setup = function()
-  -- Auto-setup navigation for all beancount files
-  vim.api.nvim_create_autocmd("FileType", {
-    pattern = "beancount",
-    callback = function()
-      M.setup_buffer()
-    end,
-  })
-end
+M.setup = function() end
 
 return M

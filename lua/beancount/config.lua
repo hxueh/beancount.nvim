@@ -40,9 +40,10 @@ local defaults = {
 
   -- Feature toggles for various beancount capabilities
   inlay_hints = true,
-  auto_save_before_check = true,
   auto_format_on_save = true,
   auto_fill_amounts = false,
+  validation_debounce_ms = 250, -- Coalesce edits before loading the ledger
+  validation_timeout_ms = 10000, -- Bound each validation process, including saves
 
   -- Configuration for code snippets and templates
   snippets = {
@@ -79,9 +80,10 @@ local validation_schema = {
   python_path = { type = "string" },
   flag_warnings = { type = "table" },
   inlay_hints = { type = "boolean" },
-  auto_save_before_check = { type = "boolean" },
   auto_format_on_save = { type = "boolean" },
   auto_fill_amounts = { type = "boolean" },
+  validation_debounce_ms = { type = "number", min = 0, max = 60000 },
+  validation_timeout_ms = { type = "number", min = 1, max = 60000 },
 }
 
 -- Validates a single configuration key-value pair
@@ -137,7 +139,7 @@ M.setup = function(opts)
       signs = M.options.ui.signs,
       update_in_insert = M.options.ui.update_in_insert,
       severity_sort = M.options.ui.severity_sort,
-    })
+    }, vim.api.nvim_create_namespace("beancount-diagnostics"))
   end
 end
 

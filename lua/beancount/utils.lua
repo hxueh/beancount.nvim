@@ -12,8 +12,9 @@ M.run_cmd = function(cmd, args, callback, opts)
   opts = opts or {}
   local stdout = {}
   local stderr = {}
+  local done, timed_out = false, false
 
-  local job_id = vim.fn.jobstart(vim.list_extend({ cmd }, args), {
+  local started, job_id = pcall(vim.fn.jobstart, vim.list_extend({ cmd }, args), {
     cwd = opts.cwd,
     stdout_buffered = true,
     stderr_buffered = true,
@@ -28,8 +29,10 @@ M.run_cmd = function(cmd, args, callback, opts)
       end
     end,
     on_exit = function(_, exit_code)
+      done = true
+      if timed_out then exit_code = 124 end
       local stdout_str = table.concat(stdout, "\n")
-      local stderr_str = table.concat(stderr, "\n")
+      local stderr_str = timed_out and "Validation timed out" or table.concat(stderr, "\n")
 
       if callback then
         callback(stdout_str, stderr_str, exit_code)
@@ -37,18 +40,50 @@ M.run_cmd = function(cmd, args, callback, opts)
     end,
   })
 
+  if not started then
+    if callback then callback("", tostring(job_id), -1) end
+    return -1
+  end
+  -- Stop slow validators even when the editor keeps changing. The completion
+  -- callback still runs on exit so ledger scheduling can release its slot.
+  if job_id > 0 and opts.timeout_ms then
+    vim.defer_fn(function()
+      if not done then
+        timed_out = true
+        vim.fn.jobstop(job_id)
+      end
+    end, opts.timeout_ms)
+  end
+  if job_id > 0 and opts.stdin then
+    vim.fn.chansend(job_id, opts.stdin)
+    vim.fn.chanclose(job_id, "stdin")
+  elseif job_id <= 0 and callback then
+    callback("", "Could not start " .. cmd, -1)
+  end
   return job_id
 end
 
 -- Execute a command synchronously and return the result
 -- @param cmd string: Command to execute
 -- @param args table: Command arguments
--- @return string, number: stdout output and exit code
-M.run_cmd_sync = function(cmd, args)
-  local full_cmd = vim.list_extend({ cmd }, args)
-  local result = vim.fn.system(full_cmd)
-  local exit_code = vim.v.shell_error
-  return result, exit_code
+-- @return string, number, string: stdout, exit code, and stderr
+M.run_cmd_sync = function(cmd, args, input, timeout_ms)
+  timeout_ms = timeout_ms or 10000
+  local output, code, error_output = "", -1, "Could not start " .. cmd
+  -- Use the same separate pipes as async validation: plugin progress on stderr
+  -- must never become part of the JSON response. jobwait bounds save latency.
+  local job = M.run_cmd(cmd, args, function(stdout, stderr, status)
+    output, code, error_output = stdout, status, stderr
+  end, { stdin = input })
+  if job > 0 then
+    local status = vim.fn.jobwait({ job }, timeout_ms)[1]
+    if status == -1 or status == -2 then
+      vim.fn.jobstop(job)
+      vim.fn.jobwait({ job }, 1000)
+      return "", status == -1 and 124 or 130, status == -1 and "Validation timed out" or "Validation interrupted"
+    end
+  end
+  return output, code, error_output
 end
 
 -- Search from the buffer directory, stopping at the nearest repository boundary.

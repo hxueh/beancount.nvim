@@ -568,11 +568,11 @@ run_test("should handle all valid transaction flags", function()
   -- Invalid flags should not match
   mock_fold_context('2024-01-01 ? "Invalid flag"', 3)
   local result3 = fold.foldexpr()
-  test_assert(result3 == "=", "should not match invalid flag ?")
+  test_assert(result3 == ">1", "should match valid flag ?")
 
   mock_fold_context('2024-01-01 # "Invalid flag"', 4)
   local result4 = fold.foldexpr()
-  test_assert(result4 == "=", "should not match invalid flag #")
+  test_assert(result4 == ">1", "should match valid flag #")
 
   restore_vim_functions()
 end)
@@ -625,9 +625,7 @@ run_test("should not match invalid patterns", function()
   local invalid_patterns = {
     '2024-1-1 * "Bad date format"',
     '24-01-01 * "Short year"',
-    '2024/01/01 * "Wrong separator"',
     '2024-01-01* "No space before flag"',
-    '2024-01-01 & "Invalid flag"',
     "2024-01-01 opne Assets:Bank",   -- typo
     "2024-01-01  oopen Assets:Bank", -- double o
     'PLUGIN "test"',                 -- wrong case
@@ -654,7 +652,7 @@ run_test("should handle pattern behavior edge cases", function()
 
   mock_fold_context("2024-01-01 !description", 2)
   local result2 = fold.foldexpr()
-  test_assert(result2 == ">1", "pattern [*!] matches ! flag followed by any character")
+  test_assert(result2 == "=", "reject invalid text after flag")
 
   -- plugin and option by themselves do match the patterns
   mock_fold_context("plugin", 3)
@@ -771,7 +769,7 @@ run_test("should handle transaction flag edge cases", function()
   -- Multiple flags (invalid but pattern might match first one)
   mock_fold_context('2024-01-01 *! "Multiple flags"', 1)
   local result1 = fold.foldexpr()
-  test_assert(result1 == ">1", "should match first valid flag")
+  test_assert(result1 == "=", "reject multiple flags")
 
   -- Flag with extra spaces
   mock_fold_context('2024-01-01   *   "Extra spaces"', 2)

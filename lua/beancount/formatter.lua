@@ -69,8 +69,7 @@ M.handle_text_change = function()
     local prev_line = vim.fn.getline(line_num - 1)
     -- Beancount accepts uppercase letters and punctuation flags, plus 'txn'.
     -- Match the whole marker so longer words cannot be mistaken for flags.
-    local marker = prev_line:match("^%d%d%d%d%-%d%d%-%d%d%s+(%S+)")
-    local is_transaction = marker and (marker == "txn" or marker:match("^[A-Z*!&#?%%]$"))
+    local is_transaction = require("beancount.syntax").transaction(prev_line)
 
     if is_transaction and line == "" then
       M.indent_posting_line(line_num)
@@ -93,8 +92,7 @@ M.is_posting_line = function(line)
   if not line or type(line) ~= "string" then
     return false
   end
-  -- Posting lines start with whitespace and contain an account
-  return line:match("^%s+[A-Z][a-zA-Z0-9:_-]+") ~= nil
+  return require("beancount.syntax").posting(line) ~= nil
 end
 
 M.align_amount = function(line_num)
@@ -102,8 +100,9 @@ M.align_amount = function(line_num)
   local separator_col = config.get("separator_column")
 
   -- Parse the posting line to get account and amount
-  local indent, account, amount = line:match("^(%s+)([A-Z][a-zA-Z0-9:_-]+)%s+(.*)$")
-  if not indent or not account or not amount then
+  local indent, account, amount = require("beancount.syntax").posting(line)
+  amount = amount and amount:gsub("^%s+", "")
+  if not indent or not account or not amount or amount == "" then
     return
   end
 
@@ -193,8 +192,9 @@ M.format_posting_line = function(line_num, separator_col)
   local line = vim.fn.getline(line_num)
 
   -- Parse the posting line
-  local indent, account, amount = line:match("^(%s+)([A-Z][a-zA-Z0-9:_-]+)%s+(.*)$")
-  if not indent or not account or not amount then
+  local indent, account, amount = require("beancount.syntax").posting(line)
+  amount = amount and amount:gsub("^%s+", "")
+  if not indent or not account or not amount or amount == "" then
     return
   end
 

@@ -44,15 +44,18 @@ filename = vim.api.nvim_buf_get_name(buf)
 local python = vim.env.BEANCOUNT_TEST_PYTHON or ".venv/bin/python"
 
 check("backend output renders hints and clears removed postings", function()
-  local output = vim.fn.system({ python, "pythonFiles/beancheck.py", filename })
+  local output = vim.fn.system({ python, "pythonFiles/beancheck.py", filename, "--json" })
   assert(vim.v.shell_error == 0, output)
-  diagnostics.process_diagnostics(output)
+  assert(diagnostics.process_diagnostics(output))
   assert(#vim.api.nvim_buf_get_extmarks(buf, hints.namespace, 0, -1, {}) == 1)
-  hints.update_data('{"automatics":{},"cost_basis":{}}')
+  local data = vim.json.decode(output)
+  data.hints.automatics = {}
+  assert(diagnostics.process_diagnostics(vim.json.encode(data)))
   assert(#vim.api.nvim_buf_get_extmarks(buf, hints.namespace, 0, -1, {}) == 0)
 end)
 
 check("disabling hints removes existing marks", function()
+  diagnostics.states = {}
   hints.update_data(vim.json.encode({ [filename] = { ["5"] = { "-100 USD" } } }))
   assert(#vim.api.nvim_buf_get_extmarks(buf, hints.namespace, 0, -1, {}) == 1)
   config.set("inlay_hints", false)
@@ -82,34 +85,33 @@ check("cost enhancement preserves prices, labels, quantities, and comments", fun
   for i = 1, #original do
     autofill.cost_basis_data[filename][tostring(i)] = '999 ABC {10 USD, 2025-01-01} @@ 10.00 USD'
   end
-  assert(autofill.enhance_cost_basis(buf))
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  assert(lines[1] == '  Assets:Stock  -1 ABC {10 USD, "lot; @ } label", 2025-01-01} @ 15 USD ; retain this', lines[1])
-  assert(lines[2] == '  Assets:Stock  -2 ABC {10 USD, 2025-01-01} @@ 30 USD ; total proceeds', lines[2])
-  assert(lines[3] == '  Assets:Stock  1 ABC {10 USD, 2024-01-01, "lot"} @@ 10.00 USD ; keep', lines[3])
-  assert(lines[4] == original[4])
-  assert(lines[5] == original[5])
-  assert(not autofill.enhance_cost_basis(buf), "enhancement must be idempotent")
+  assert(not autofill.enhance_cost_basis(buf))
+  assert(vim.deep_equal(vim.api.nvim_buf_get_lines(buf, 0, -1, false), original),
+    "costs, labels, quantities, prices and comments must remain exactly as authored")
 end)
 
-check("cost annotations use original line numbers before posting expansion", function()
+check("posting expansion preserves subsequent authored costs", function()
   config.set("auto_fill_amounts", true)
+  config.set("python_path", python)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
-    '  Assets:Cash', '  Assets:Stock  1 ABC {10 USD}',
+    '2025-01-01 open Assets:Cash',
+    '2025-01-01 open Equity:Opening',
+    '2025-01-01 open Assets:Stock ABC',
+    '2025-01-02 * "Mixed currencies"',
+    '  Equity:Opening -1 USD',
+    '  Equity:Opening -2 EUR',
+    '  ! Assets:Cash ; keep flag and comment',
+    '2025-01-03 * "Buy"',
+    '  Assets:Stock  1 ABC {10 USD, 2025-01-03, "lot"} @ 10 USD ; keep',
+    '  Assets:Cash -10 USD',
   })
-  local original_check = diagnostics.check_file_sync
-  diagnostics.check_file_sync = function()
-    return {
-      automatics = { [filename] = { ["1"] = { "1 USD", "2 EUR" } } },
-      cost_basis = { [filename] = { ["2"] = '1 ABC {10 USD, 2025-01-01} @@ 10.00 USD' } },
-    }
-  end
-  local ok, result = pcall(autofill.fill_buffer, buf)
-  diagnostics.check_file_sync = original_check
-  assert(ok and result, tostring(result))
+  assert(autofill.fill_buffer(buf))
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  assert(#lines == 3)
-  assert(lines[3] == '  Assets:Stock  1 ABC {10 USD, 2025-01-01} @@ 10.00 USD', lines[3])
+  assert(#lines == 11)
+  assert(lines[7]:match('^  ! Assets:Cash') and lines[7]:find('; keep flag and comment', 1, true))
+  assert(lines[8]:match('^  ! Assets:Cash'))
+  assert(lines[10] == '  Assets:Stock  1 ABC {10 USD, 2025-01-03, "lot"} @ 10 USD ; keep', lines[10])
+  assert(not autofill.fill_buffer(buf), "autofill must be idempotent")
 end)
 
 vim.api.nvim_buf_delete(buf, { force = true })
