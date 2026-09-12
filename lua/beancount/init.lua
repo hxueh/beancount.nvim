@@ -19,6 +19,7 @@ M.setup = function(opts)
   M.initialized = true
 
   -- Initialize all beancount components with their respective configurations
+  require("beancount.explorer").setup()
   diagnostics.setup()
   completion.setup()
   formatter.setup()
@@ -83,6 +84,7 @@ M.setup_buffer = function()
   navigation.setup_buffer(buf)
   inlay_hints.setup_buffer(buf)
   symbols.setup_buffer(buf)
+  require("beancount.explorer").setup_buffer(buf)
   autofill.setup_buffer(buf)
 
   -- Run initial diagnostics check after a short delay to ensure buffer is ready

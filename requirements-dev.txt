@@ -1,2 +1,4 @@
 # Backend version used by the Python and Neovim integration tests.
 beancount==3.2.3
+# Optional at runtime; installed here to exercise query integration.
+beanquery==0.2.0

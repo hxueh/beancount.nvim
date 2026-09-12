@@ -54,6 +54,7 @@ local defaults = {
   -- Default keyboard shortcuts for beancount navigation
   keymaps = {
     goto_definition = "gd",
+    references = "gr",
     next_transaction = "]]",
     prev_transaction = "[[",
   },

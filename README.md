@@ -97,6 +97,7 @@ require("beancount").setup({
   -- Key mappings (customizable)
   keymaps = {
     goto_definition = "gd",     -- Go to definition
+    references = "gr",          -- Find account, tag, or link references
     next_transaction = "]]",    -- Next transaction
     prev_transaction = "[[",    -- Previous transaction
   },
@@ -186,6 +187,38 @@ failures are reported, and failed checks leave inferred amounts unapplied.
 - `K` - Show account hover information (on account names)
 - `]]` - Next transaction
 - `[[` - Previous transaction
+
+### Ledger exploration
+
+- `gr` or `:BeancountReferences` finds the account, `#tag`, or `^link` under the
+  cursor across the loaded ledger, including included files. Results open in
+  quickfix with source locations and transaction descriptions. Use `:cnext`,
+  `:cprevious`, or Enter to jump. You can also pass a token explicitly:
+  `:BeancountReferences Assets:Cash`. Set `keymaps.references = ""` to disable `gr`.
+- `:BeancountBalance` shows inventories immediately before and after the current
+  transaction. On an account token it shows that account; elsewhere in the
+  transaction it shows all posted accounts. Balances follow Beancount's loaded
+  transaction order, including same-day entries, and retain currencies and cost
+  lots. They are exact-account inventories, without child-account aggregation or
+  market-price conversion. The existing `K` hover continues to show the inventory
+  over the entire loaded ledger.
+- `:BeancountQuery SELECT account, sum(position) GROUP BY account` runs BQL and
+  opens a result table. With no argument, it runs the `query` directive on the
+  cursor line. A line range, including a visual line selection, supplies raw BQL:
+  `:'<,'>BeancountQuery`. Supported statements are `SELECT`, `BALANCES`, and
+  `JOURNAL`. Install the optional `beanquery` package in the Python environment
+  selected by the plugin (`python -m pip install beanquery`). Other features do
+  not require it.
+
+Balance and query results open in read-only scratch windows; press `q` to close.
+All three commands load fresh editor snapshots asynchronously and use
+`validation_timeout_ms`. A newer exploration request for the same ledger replaces
+an earlier one. If a captured buffer changes while a request runs, rerun the
+command. These operations do not save or rewrite ledger files. References may
+show partial results when the ledger has errors; balances and queries require a
+valid ledger. Tags inherited through `pushtag` match their transactions, and
+account definitions are included in reference results. Text in comments and
+quoted descriptions does not count as a reference.
 
 ### Folding
 

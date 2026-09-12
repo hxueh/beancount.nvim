@@ -41,6 +41,7 @@ test:
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/regression_test.lua"
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/validation_test.lua"
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/syntax_test.lua"
+	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/explorer_test.lua"
 	@echo "Running Python tests..."
 	@"$(PYTHON)" -m unittest discover -s tests -p '*_test.py'
 
