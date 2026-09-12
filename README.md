@@ -44,9 +44,16 @@ then `python3` or `python` on PATH. The selected environment must contain Beanco
 Explicit `main_bean_file` and `python_path` options override detection.
 
 If Blink or LuaSnip is installed, the plugin uses it automatically. Its bundled
-`lazy.lua` also adds the Beancount parser to an existing nvim-treesitter
-`ensure_installed` list without replacing other languages. With other plugin
-managers, install the parser through your Treesitter configuration if desired.
+`lazy.lua` also adds the Beancount parser to the legacy nvim-treesitter `master`
+branch's `ensure_installed` list without replacing other languages. On the
+current `main` branch, install it with `:TSInstall beancount` instead. With other
+plugin managers, install the parser through your Treesitter configuration.
+
+The plugin starts Treesitter highlighting for Beancount buffers automatically
+when the parser is available; no extra FileType autocommand is needed. Treesitter
+is optional, and a missing parser does not prevent other editor features from
+loading. If you install the parser after opening a buffer, run
+`:lua vim.treesitter.start()` in that buffer or reopen the file.
 
 To keep automatic amount filling enabled, use `opts = { auto_fill_amounts = true }`.
 Alignment already defaults to column 70.

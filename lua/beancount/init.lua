@@ -77,6 +77,12 @@ M.setup_buffer = function()
   -- Configure buffer options specific to beancount syntax
   vim.bo[buf].commentstring = ";; %s"
 
+    -- Current nvim-treesitter provides parsers but does not enable highlighting.
+    -- Keep setup usable when the optional parser or Neovim start API is absent.
+    if vim.treesitter and vim.treesitter.start then
+        pcall(vim.treesitter.start, buf, "beancount")
+    end
+
   -- Initialize all buffer-specific features for beancount editing
   completion.setup_buffer(buf)
   completion.setup_hover(buf)

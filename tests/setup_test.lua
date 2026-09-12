@@ -1,5 +1,7 @@
 -- Exercise default setup using real buffers and files, including cross-cwd use.
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
+-- Control initialization below instead of letting the ftplugin run during edit.
+vim.cmd("filetype plugin off")
 local root = vim.fn.tempname()
 local config = require("beancount.config")
 local utils = require("beancount.utils")
@@ -70,17 +72,45 @@ local ok, err = pcall(function()
   require("beancount.diagnostics").check_file = function() end
   config.set("auto_fill_amounts", true)
   local plugin = require("beancount")
+  -- Simulate an installed parser without depending on the user's Treesitter setup.
+  local start = vim.treesitter.start
+  local started = {}
+  vim.treesitter.start = function(buf, language)
+    assert(language == "beancount")
+    started[buf] = (started[buf] or 0) + 1
+  end
   plugin.setup_buffer()
+  assert(started[vim.api.nvim_get_current_buf()] == 1, "start highlighting during automatic setup")
   assert(plugin.initialized and vim.b.beancount_setup, "initialize without setup call")
   assert(config.get("auto_fill_amounts"), "preserve config set before automatic setup")
   local count = #vim.api.nvim_get_autocmds({ group = "BeancountExtension" })
   plugin.setup_buffer()
+  assert(started[vim.api.nvim_get_current_buf()] == 1, "do not start highlighting twice")
   assert(#vim.api.nvim_get_autocmds({ group = "BeancountExtension" }) == count)
-  vim.cmd("enew")
-  vim.bo.filetype = "beancount"
-  vim.b.beancount_setup = nil
+  vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))
+  -- Mimic a FileType event that occurred before the plugin was loaded.
+  vim.cmd("noautocmd setfiletype beancount")
   plugin.setup({ auto_fill_amounts = true })
   assert(vim.b.beancount_setup, "attach to an already open buffer")
+  assert(started[vim.api.nvim_get_current_buf()] == 1, "start highlighting after lazy loading")
+
+  -- FileType setup must also start highlighting for subsequently opened buffers.
+  vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))
+  vim.bo.filetype = "beancount"
+  assert(started[vim.api.nvim_get_current_buf()] == 1, "start highlighting on FileType")
+
+  -- A missing parser or older Neovim API must not prevent other editor features.
+  vim.treesitter.start = function() error("No parser for language beancount") end
+  vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))
+  vim.bo.filetype = "beancount"
+  assert(vim.b.beancount_setup, "set up without a parser")
+  assert(#vim.api.nvim_get_autocmds({ buffer = 0, event = "InsertCharPre" }) > 0, "keep completion without a parser")
+  vim.treesitter.start = nil
+  vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))
+  vim.bo.filetype = "beancount"
+  assert(vim.b.beancount_setup, "set up without the start API")
+  assert(#vim.api.nvim_get_autocmds({ buffer = 0, event = "InsertCharPre" }) > 0, "keep completion without the start API")
+  vim.treesitter.start = start
 end)
 vim.fn.delete(root, "rf")
 if not ok then
