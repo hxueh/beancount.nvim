@@ -189,24 +189,57 @@ M.enhance_cost_basis = function(bufnr)
             local line_text = vim.api.nvim_buf_get_lines(bufnr, zero_based_line, zero_based_line + 1, false)[1]
 
             if line_text then
-                -- Check if line has incomplete cost notation (has { but missing date or @@)
-                local has_cost = line_text:match("{[^}]+}")
-                if has_cost then
-                    -- Check if already has both date and @@
-                    local has_date = line_text:match("%d%d%d%d%-%d%d%-%d%d")
-                    local has_total_cost = line_text:match("@@")
-
-                    -- Only enhance if incomplete
-                    if not (has_date and has_total_cost) then
-                        -- Extract indent and account name from current line
-                        local indent, account = line_text:match("^(%s+)([A-Z][a-zA-Z0-9:_%-]+)")
-
-                        if indent and account then
-                            -- Build new line with enhanced position
-                            local new_line = indent .. account .. "  " .. enhanced_position
-                            vim.api.nvim_buf_set_lines(bufnr, zero_based_line, zero_based_line + 1, false, { new_line })
-                            lines_modified = lines_modified + 1
+                -- Locate syntax outside quoted labels so semicolons and braces in
+                -- labels are not mistaken for comments or cost delimiters.
+                local quoted, escaped = false, false
+                local cost_start, cost_end
+                local syntax = {}
+                for i = 1, #line_text do
+                    local char = line_text:sub(i, i)
+                    if escaped then
+                        escaped = false
+                    elseif quoted and char == "\\" then
+                        escaped = true
+                    elseif char == '"' then
+                        quoted = not quoted
+                    elseif not quoted then
+                        syntax[#syntax + 1] = char
+                        if char == ";" then
+                            break
+                        elseif char == "{" and not cost_start then
+                            cost_start = i
+                        elseif char == "}" and cost_start then
+                            cost_end = i
+                            break
                         end
+                    end
+                end
+
+                -- Preserve the original units, cost components, and price. Only
+                -- add missing annotations to simple per-unit cost specifications.
+                if cost_start and cost_end
+                    and line_text:sub(cost_start + 1, cost_start + 1) ~= "{"
+                    and line_text:sub(cost_start + 1, cost_end - 1):match("%S") then
+                    local cost = line_text:sub(cost_start, cost_end)
+                    local suffix = line_text:sub(cost_end + 1)
+                    local body, comment = suffix:match("^(.-)(;.*)$")
+                    body, comment = body or suffix, comment or ""
+                    local generated_cost = enhanced_position:match("{(.-)}") or ""
+                    local date = generated_cost:match("%d%d%d%d%-%d%d%-%d%d")
+                    -- Strip quoted labels before checking for an explicit date.
+                    local unquoted_cost = table.concat(syntax):match("{(.*)}") or ""
+                    if date and not unquoted_cost:match("%d%d%d%d%-%d%d%-%d%d") then
+                        cost = cost:sub(1, -2) .. ", " .. date .. "}"
+                    end
+                    local total = enhanced_position:match("(@@%s+.+)$")
+                    if total and not body:find("@", 1, true) then
+                        local trailing = body:match("%s*$") or ""
+                        body = body:sub(1, #body - #trailing) .. " " .. total .. trailing
+                    end
+                    local new_line = line_text:sub(1, cost_start - 1) .. cost .. body .. comment
+                    if new_line ~= line_text then
+                        vim.api.nvim_buf_set_lines(bufnr, zero_based_line, zero_based_line + 1, false, { new_line })
+                        lines_modified = lines_modified + 1
                     end
                 end
             end
@@ -231,23 +264,21 @@ M.fill_buffer = function(bufnr)
     -- Run synchronous validation to get fresh data
     -- This ensures newly added transactions are detected on first save
     local diagnostics = require("beancount.diagnostics")
-    local fresh_data = diagnostics.check_file_sync()
-    if fresh_data then
-        -- Update both automatics and cost_basis data
-        M.update_data(vim.json.encode(fresh_data))
+    local fresh_data = vim.api.nvim_buf_call(bufnr, diagnostics.check_file_sync)
+    if not fresh_data then
+        -- Cached line numbers and amounts may describe an older transaction.
+        M.update_data(nil)
+        return false
     end
+    M.update_data(vim.json.encode(fresh_data))
 
     -- Save cursor position to restore after filling
     local cursor_pos = vim.api.nvim_win_get_cursor(0)
-    local total_modified = false
 
-    -- Phase 1: Fill incomplete amounts
-    local amounts_modified = M.fill_incomplete_amounts(bufnr)
-    total_modified = total_modified or amounts_modified
-
-    -- Phase 2: Enhance cost basis
+    -- Enhance before expanding multi-currency postings, which shifts line numbers.
     local cost_basis_modified = M.enhance_cost_basis(bufnr)
-    total_modified = total_modified or cost_basis_modified
+    local amounts_modified = M.fill_incomplete_amounts(bufnr)
+    local total_modified = cost_basis_modified or amounts_modified
 
     -- Restore cursor position
     pcall(vim.api.nvim_win_set_cursor, 0, cursor_pos)

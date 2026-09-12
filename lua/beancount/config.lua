@@ -172,7 +172,8 @@ M.get = function(key)
   end
 
   if key:find("%.") then
-    local keys = vim.split(key, "%.", { plain = true })
+    -- Dot notation uses a literal separator, not a Lua pattern.
+    local keys = vim.split(key, ".", { plain = true })
     local value = M.options
     for _, k in ipairs(keys) do
       value = value[k]
@@ -191,7 +192,8 @@ end
 -- @param value any: Value to set
 M.set = function(key, value)
   if key:find("%.") then
-    local keys = vim.split(key, "%.", { plain = true })
+    -- Dot notation uses a literal separator, not a Lua pattern.
+    local keys = vim.split(key, ".", { plain = true })
     local target = M.options
     for i = 1, #keys - 1 do
       if target[keys[i]] == nil then

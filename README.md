@@ -283,6 +283,22 @@ neovim/
     └── beancheck.py       # Beancount file parser and checker
 ```
 
+## Development
+
+Install `uv`, Neovim, and `luacheck`, then run:
+
+```sh
+make setup
+make test
+make lint
+```
+
+`make setup` creates or reuses `.venv` and installs the Beancount version pinned in
+`requirements-dev.txt`. Tests use that interpreter for both Python tests and
+Neovim integration tests. To use an existing environment, run
+`make test PYTHON=/absolute/path/to/python`. Test and lint failures return a
+nonzero exit status.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues and pull requests.

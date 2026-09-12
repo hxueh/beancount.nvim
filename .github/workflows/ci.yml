@@ -30,7 +30,7 @@ jobs:
 
       - name: Run luacheck
         run: |
-          luacheck lua/ --globals vim --std luajit --codes || true
+          make lint
 
   # Unit tests
   test:
@@ -51,8 +51,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install beancount
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-dev.txt
 
       - name: Install Neovim
         uses: rhysd/action-setup-vim@v1

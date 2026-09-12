@@ -63,12 +63,14 @@ end
 M.update_data = function(data_json)
   if not data_json or data_json == "" then
     M.automatics = {}
+    M.update_visible_buffers()
     return
   end
 
   local ok, data = pcall(vim.json.decode, data_json)
-  if ok and data then
-    M.automatics = data
+  if ok and type(data) == "table" then
+    -- The backend wraps postings alongside cost data; retain legacy input support.
+    M.automatics = data.automatics or (data.cost_basis and {}) or data
   else
     M.automatics = {}
   end
@@ -77,17 +79,11 @@ M.update_data = function(data_json)
   M.update_visible_buffers()
 end
 
--- Check if a buffer has automatic posting data
--- @param bufnr number: Buffer number to check
--- @return boolean: True if buffer has automatic postings
-local function is_tracked_buffer(bufnr)
-  local filename = vim.api.nvim_buf_get_name(bufnr)
-  return M.automatics[filename] ~= nil
-end
-
 -- Render virtual text hints for automatic postings in a buffer
 -- @param bufnr number: Buffer number to render hints for
 M.render_hints = function(bufnr)
+  -- Clear first so removed postings and disabled hints cannot leave stale marks.
+  vim.api.nvim_buf_clear_namespace(bufnr, M.namespace, 0, -1)
   if not config.get("inlay_hints") then
     return
   end
@@ -103,9 +99,6 @@ M.render_hints = function(bufnr)
   if not file_automatics then
     return
   end
-
-  -- Remove any existing virtual text before adding new hints
-  vim.api.nvim_buf_clear_namespace(bufnr, M.namespace, 0, -1)
 
   ---@diagnostic disable-next-line: param-type-mismatch
   for line_str, amounts in pairs(file_automatics) do
@@ -168,7 +161,7 @@ M.update_visible_buffers = function()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local bufnr = vim.api.nvim_win_get_buf(win)
     ---@diagnostic disable-next-line: undefined-field
-    if vim.bo[bufnr].filetype == "beancount" and is_tracked_buffer(bufnr) then
+    if vim.bo[bufnr].filetype == "beancount" then
       M.render_hints(bufnr)
     end
   end
@@ -214,7 +207,7 @@ M.setup = function()
     group = vim.api.nvim_create_augroup("BeancountInlayHintsGlobal", { clear = true }),
     callback = function()
       local bufnr = vim.api.nvim_get_current_buf()
-      if vim.bo[bufnr].filetype == "beancount" and is_tracked_buffer(bufnr) then
+      if vim.bo[bufnr].filetype == "beancount" then
         M.render_hints(bufnr)
       end
     end,

@@ -134,8 +134,8 @@ run_test("should fill incomplete postings correctly", function()
     test_assert(autofill.automatics[actual_filename] ~= nil, "Should have data for test file")
     test_assert(autofill.automatics[actual_filename]["4"] ~= nil, "Should have data for line 4")
 
-    -- Run fill_buffer
-    autofill.fill_buffer(test_buf)
+    -- Test the insertion helper directly; fill_buffer requires fresh disk data.
+    autofill.fill_incomplete_amounts(test_buf)
 
     -- Check if the line was filled
     local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
@@ -177,8 +177,8 @@ run_test("should fill incomplete postings with multiple currencies", function()
     test_assert(autofill.automatics[actual_filename] ~= nil, "Should have data for test file")
     test_assert(#autofill.automatics[actual_filename]["4"] == 2, "Should have 2 amounts for line 4")
 
-    -- Run fill_buffer
-    autofill.fill_buffer(test_buf)
+    -- Test the insertion helper directly; fill_buffer requires fresh disk data.
+    autofill.fill_incomplete_amounts(test_buf)
 
     -- Check if the line was expanded to multiple lines
     local lines = vim.api.nvim_buf_get_lines(test_buf, 0, -1, false)
@@ -302,14 +302,16 @@ run_test("should auto-fill on save (end-to-end)", function()
 
     -- Determine Python path (check for venv first, fallback to system python)
     local python_path = "python3"
-    if vim.fn.executable(".venv/bin/python") == 1 then
+    if vim.env.BEANCOUNT_TEST_PYTHON then
+        python_path = vim.env.BEANCOUNT_TEST_PYTHON
+    elseif vim.fn.executable(".venv/bin/python") == 1 then
         python_path = ".venv/bin/python"
     elseif vim.fn.executable("python") == 1 then
         python_path = "python"
     end
 
     -- Verify beancount is installed
-    local check_beancount = vim.fn.system(python_path .. " -c 'import beancount' 2>&1")
+    local check_beancount = vim.fn.system({ python_path, "-c", "import beancount" })
     if vim.v.shell_error ~= 0 then
         print("  ⚠ Skipping integration test: beancount not installed for " .. python_path)
         tests_run = tests_run - 1  -- Don't count this as a failed test

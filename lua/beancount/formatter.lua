@@ -228,7 +228,9 @@ end
 M.display_width = function(text)
   if config.get("fixed_cjk_width") then
     local width = 0
-    for _, char in require("utf8").codes(text) do
+    -- Neovim supplies UTF-8 decoding; LuaJIT has no built-in utf8 module.
+    for i = 0, vim.fn.strchars(text) - 1 do
+      local char = vim.fn.strgetchar(text, i)
       if M.is_cjk_char(char) then
         width = width + 2
       else

@@ -1,0 +1,2 @@
+# Backend version used by the Python and Neovim integration tests.
+beancount==3.2.3
