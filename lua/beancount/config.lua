@@ -17,7 +17,7 @@ local defaults = {
   main_bean_file = "",
 
   -- Python interpreter configuration for beancount tools
-  python_path = "python",
+  python_path = "", -- Detect the ledger virtualenv, active virtualenv, or Python on PATH
 
   -- Configuration for diagnostic warnings based on transaction flags
   -- Special flags:

@@ -51,18 +51,40 @@ M.run_cmd_sync = function(cmd, args)
   return result, exit_code
 end
 
+-- Search from the buffer directory, stopping at the nearest repository boundary.
+-- Resolving on each use keeps separate ledgers independent of Neovim's cwd.
+local function find_upward(names, start_dir)
+  local dir = start_dir
+  while dir and dir ~= "" do
+    for _, name in ipairs(names) do
+      local path = dir .. "/" .. name
+      if M.file_exists(path) then
+        return path
+      end
+    end
+    if vim.loop.fs_stat(dir .. "/.git") then
+      break
+    end
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then
+      break
+    end
+    dir = parent
+  end
+end
+
 -- Resolve the path to the main beancount file
--- Falls back to current file if no main file is configured
+-- Finds the nearest main.bean/main.beancount, then falls back to the current file
 -- @return string: Absolute path to main beancount file or empty string
 M.get_main_bean_file = function()
   local config = require("beancount.config")
   local main_file = config.get("main_bean_file")
 
   if not main_file or main_file == "" then
-    -- Default to current file if it's a beancount file and no main file specified
+    -- Only infer a ledger for Beancount buffers; other filetypes have no default.
     local current_file = vim.fn.expand("%:p")
     if vim.bo.filetype == "beancount" then
-      return current_file
+      return find_upward({ "main.bean", "main.beancount" }, vim.fn.fnamemodify(current_file, ":h")) or current_file
     else
       return ""
     end
@@ -79,6 +101,35 @@ M.get_main_bean_file = function()
   end
 
   return main_file
+end
+
+-- Explicit interpreters keep their existing cwd-relative behavior. Otherwise use
+-- the ledger's environment so opening an included file from another cwd works.
+M.get_python_path = function()
+  local path = require("beancount.config").get("python_path")
+  if path and path ~= "" then
+    path = M.resolve_env_vars(path)
+    if path:sub(1, 1) == "~" then
+      path = vim.fn.expand("~") .. path:sub(2)
+    end
+    return path
+  end
+
+  local main_file = M.get_main_bean_file()
+  local dir = main_file ~= "" and vim.fn.fnamemodify(main_file, ":h") or vim.fn.getcwd()
+  local local_python = find_upward({ ".venv/bin/python", ".venv/Scripts/python.exe" }, dir)
+  if local_python and vim.fn.executable(local_python) == 1 then
+    return local_python
+  end
+  local env = vim.env.VIRTUAL_ENV
+  if env and env ~= "" then
+    for _, suffix in ipairs({ "/bin/python", "/Scripts/python.exe" }) do
+      if vim.fn.executable(env .. suffix) == 1 then
+        return env .. suffix
+      end
+    end
+  end
+  return vim.fn.executable("python3") == 1 and "python3" or "python"
 end
 
 -- Expand environment variables in path strings

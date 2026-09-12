@@ -25,17 +25,7 @@ M.check_file = function()
 
   local plugin_dir = utils.get_plugin_dir()
   local check_script = plugin_dir .. "/pythonFiles/beancheck.py"
-  local python_path = config.get("python_path")
-
-  -- Handle environment variable expansion in python_path (e.g., %PYTHON_HOME%)
-  if python_path:match("^%%") then
-    python_path = utils.resolve_env_vars(python_path)
-  end
-
-  -- Expand ~ to user home directory in python_path
-  if python_path:sub(1, 1) == "~" then
-    python_path = os.getenv("HOME") .. python_path:sub(2)
-  end
+  local python_path = utils.get_python_path()
 
   local args = { check_script, main_file }
   if config.get("complete_payee_narration") then
@@ -62,17 +52,7 @@ M.check_file_sync = function()
 
   local plugin_dir = utils.get_plugin_dir()
   local check_script = plugin_dir .. "/pythonFiles/beancheck.py"
-  local python_path = config.get("python_path")
-
-  -- Handle environment variable expansion in python_path (e.g., %PYTHON_HOME%)
-  if python_path:match("^%%") then
-    python_path = utils.resolve_env_vars(python_path)
-  end
-
-  -- Expand ~ to user home directory in python_path
-  if python_path:sub(1, 1) == "~" then
-    python_path = os.getenv("HOME") .. python_path:sub(2)
-  end
+  local python_path = utils.get_python_path()
 
   local args = { check_script, main_file }
   if config.get("complete_payee_narration") then

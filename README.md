@@ -29,46 +29,30 @@ A comprehensive Neovim plugin for [Beancount](https://beancount.github.io/) plai
 
 ### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
 
-**Recommended Setup with blink.cmp:**
-
 ```lua
 return {
-    "hxueh/beancount.nvim",
-    ft = { "beancount", "bean" },
-    dependencies = {
-        {
-            "saghen/blink.cmp",
-            optional = true,
-            opts = function(_, opts)
-                table.insert(opts.sources.default, "beancount")
-                opts.sources.providers = opts.sources.providers or {}
-                opts.sources.providers.beancount = {
-                    name = "beancount",
-                    module = "beancount.completion.blink",
-                    score_offset = 100,
-                    opts = {
-                        trigger_characters = { ":", "#", "^", '"', " " },
-                    },
-                }
-                return opts
-            end,
-        },
-        {
-            "L3MON4D3/LuaSnip",
-        },
-    },
-    config = function()
-        require("beancount").setup({})
-        -- Treesitter setup
-        require("nvim-treesitter.configs").setup {
-            ensure_installed = { "beancount" },
-            highlight = { enable = true },
-            incremental_selection = { enable = true },
-            indent = { enable = true },
-        }
-    end,
+  "hxueh/beancount.nvim",
+  ft = "beancount",
+  opts = {},
 }
 ```
+
+The plugin finds the nearest `main.bean` or `main.beancount` above the current
+file, stopping at a Git repository boundary. If neither exists, it checks the
+current file. Python is selected from the ledger's `.venv`, then `VIRTUAL_ENV`,
+then `python3` or `python` on PATH. The selected environment must contain Beancount.
+Explicit `main_bean_file` and `python_path` options override detection.
+
+If Blink or LuaSnip is installed, the plugin uses it automatically. Its bundled
+`lazy.lua` also adds the Beancount parser to an existing nvim-treesitter
+`ensure_installed` list without replacing other languages. With other plugin
+managers, install the parser through your Treesitter configuration if desired.
+
+To keep automatic amount filling enabled, use `opts = { auto_fill_amounts = true }`.
+Alignment already defaults to column 70.
+
+With other plugin managers, `require("beancount").setup({})` accepts the same
+options. Opening a Beancount file also initializes the plugin with defaults.
 
 ## Configuration
 
@@ -87,8 +71,8 @@ require("beancount").setup({
   complete_payee_narration = true,  -- Include payees/narrations
 
   -- Files & paths
-  main_bean_file = "",          -- Path to main beancount file
-  python_path = "python",       -- Python executable path
+  main_bean_file = "",          -- Auto-detect main.bean/main.beancount
+  python_path = "",             -- Auto-detect Python; set a path to override
 
   -- Diagnostics & warnings
   flag_warnings = {             -- Transaction flag warning levels

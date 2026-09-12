@@ -20,8 +20,25 @@ M.hover_enabled = true
 -- Initialize the completion system
 -- Sets up integration with blink.cmp completion engine
 M.setup = function()
-  -- blink.cmp integration works automatically when properly configured
-  -- No additional setup required here as the blink source handles everything
+  local ok, blink = pcall(require, "blink.cmp")
+  if not ok or not blink.add_source_provider or not blink.add_filetype_source then
+    return
+  end
+
+  -- Preserve a manually configured provider, including its scoring and options.
+  local blink_config = require("blink.cmp.config")
+  if not blink_config.sources.providers.beancount then
+    blink.add_source_provider("beancount", {
+      name = "beancount",
+      module = "beancount.completion.blink",
+      score_offset = 100,
+    })
+  end
+  -- Blink appends runtime sources, so register only once across setup calls.
+  if not M.blink_registered then
+    blink.add_filetype_source("beancount", "beancount")
+    M.blink_registered = true
+  end
 end
 
 -- Setup buffer-specific completion triggers and auto-commands

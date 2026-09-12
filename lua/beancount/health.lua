@@ -1,7 +1,6 @@
 local M = {}
 
 local utils = require("beancount.utils")
-local config = require("beancount.config")
 
 M.check = function()
   vim.health.start("Beancount.nvim Health Check")
@@ -15,7 +14,7 @@ M.check = function()
   end
 
   -- Check Python
-  local python_path = config.get("python_path")
+  local python_path = utils.get_python_path()
   vim.fn.jobstart({ python_path, "--version" }, {
     stdout_buffered = true,
     on_stdout = function(_, data)

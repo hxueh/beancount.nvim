@@ -26,6 +26,7 @@ help:
 test:
 	@"$(PYTHON)" -c "import beancount"
 	@echo "Running Lua tests..."
+	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/setup_test.lua"
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/config_test.lua"
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/fold_test.lua"
 	@nvim --headless --noplugin --clean -n -i NONE -c "luafile tests/inlay_hints_test.lua"

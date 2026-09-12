@@ -6,8 +6,17 @@ local M = {}
 
 -- Create a new instance of the blink.cmp source
 -- @return table: New source instance with metatable setup
-M.new = function()
-  return setmetatable({}, { __index = M })
+M.new = function(opts)
+  return setmetatable({ opts = opts or {} }, { __index = M })
+end
+
+-- Keep triggers in the source so users do not need to repeat them in Blink opts.
+M.get_trigger_characters = function(self)
+  return self.opts.trigger_characters or { ":", "#", "^", '"', " " }
+end
+
+M.enabled = function()
+  return vim.bo.filetype == "beancount"
 end
 
 -- Main completion function called by blink.cmp

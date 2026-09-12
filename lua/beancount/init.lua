@@ -16,6 +16,7 @@ local autofill = require("beancount.autofill")
 -- @param opts table: Configuration options (optional)
 M.setup = function(opts)
   config.setup(opts or {})
+  M.initialized = true
 
   -- Initialize all beancount components with their respective configurations
   diagnostics.setup()
@@ -47,6 +48,13 @@ M.setup = function(opts)
       diagnostics.refresh()
     end,
   })
+
+  -- A filetype-triggered plugin manager may call setup after FileType fired.
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "beancount" then
+      vim.api.nvim_buf_call(buf, M.setup_buffer)
+    end
+  end
 end
 
 -- Setup buffer-specific configurations for beancount files
@@ -56,6 +64,11 @@ M.setup_buffer = function()
 
   -- Prevent duplicate setup on the same buffer
   if vim.b[buf].beancount_setup then
+    return
+  end
+  -- Filetype loading also works without an explicit setup() call.
+  if not M.initialized then
+    M.setup(config.get_all())
     return
   end
   vim.b[buf].beancount_setup = true
@@ -74,7 +87,10 @@ M.setup_buffer = function()
 
   -- Run initial diagnostics check after a short delay to ensure buffer is ready
   vim.defer_fn(function()
-    diagnostics.check_file()
+    -- Check the originating buffer even if the user switches tabs during the delay.
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_call(buf, diagnostics.check_file)
+    end
   end, 100)
 end
 
