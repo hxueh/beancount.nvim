@@ -67,9 +67,12 @@ M.handle_text_change = function()
   -- Detect if user added a new line after a transaction header
   if line_num > 1 then
     local prev_line = vim.fn.getline(line_num - 1)
-    local trans_pattern = "^%d%d%d%d%-%d%d%-%d%d%s+[*!]"
+    -- Beancount accepts uppercase letters and punctuation flags, plus 'txn'.
+    -- Match the whole marker so longer words cannot be mistaken for flags.
+    local marker = prev_line:match("^%d%d%d%d%-%d%d%-%d%d%s+(%S+)")
+    local is_transaction = marker and (marker == "txn" or marker:match("^[A-Z*!&#?%%]$"))
 
-    if prev_line:match(trans_pattern) and line == "" then
+    if is_transaction and line == "" then
       M.indent_posting_line(line_num)
     end
   end

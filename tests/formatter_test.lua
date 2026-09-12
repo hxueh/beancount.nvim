@@ -73,6 +73,54 @@ run_test("indent_posting_line uses 2 spaces when shiftwidth=2 and expandtab=true
   vim.api.nvim_buf_delete(bufnr, { force = true })
 end)
 
+-- Exercise the TextChangedI callback in a real buffer so every accepted flag
+-- gets the same indentation as '*', while directives and existing text stay intact.
+local markers = { "*", "!", "&", "#", "?", "%", "txn" }
+for byte = string.byte("A"), string.byte("Z") do
+  table.insert(markers, string.char(byte))
+end
+
+local function check_new_line(header, current_line, expandtab, expected)
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(bufnr)
+  vim.bo.expandtab = expandtab
+  vim.bo.shiftwidth = 2
+  formatter.setup_buffer(bufnr)
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { header, current_line })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = bufnr })
+  local actual = vim.fn.getline(2)
+  vim.api.nvim_buf_delete(bufnr, { force = true })
+  test_assert(actual == expected, "expected " .. vim.inspect(expected) .. ", got " .. vim.inspect(actual))
+end
+
+for _, marker in ipairs(markers) do
+  run_test("new posting line indents after " .. marker, function()
+    local header = '2026-09-09 ' .. marker .. ' "someone" "something"'
+    check_new_line(header, "", true, "  ")
+    check_new_line(header, "", false, "\t")
+  end)
+end
+
+for _, header in ipairs({
+  "2026-09-09 open Assets:Cash",
+  '2026-09-09 note Assets:Cash "something"',
+  '2026-09-09 TRUE "someone" "something"',
+  '2026-09-09 txnInvalid "something"',
+  '; 2026-09-09 T "something"',
+  '  2026-09-09 T "something"',
+}) do
+  run_test("does not indent after " .. header, function()
+    check_new_line(header, "", true, "")
+  end)
+end
+
+run_test("preserves existing posting text and indentation", function()
+  for _, line in ipairs({ "  ", "\t", "  Assets:Cash" }) do
+    check_new_line('2026-09-09 T "someone" "something"', line, true, line)
+  end
+end)
+
 print("\nTest Summary:")
 print("Tests run: " .. tests_run)
 print("Tests passed: " .. tests_passed)
