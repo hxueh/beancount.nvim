@@ -97,17 +97,19 @@ function M.show_errors(errors, files)
   end
 end
 
+-- Collect flags per buffer and set them once; one set per flag is quadratic on large ledgers.
 function M.show_flags(flags)
+  local by_buf = {}
   for _, flag in ipairs(flags) do
     local severity = config.get("flag_warnings")[flag.flag]
     local buf = vim.fn.bufnr(flag.file)
     if type(severity) == "number" and severity >= 1 and severity <= 4 and buf ~= -1 then
-      local records = vim.diagnostic.get(buf, { namespace = M.namespace })
-      table.insert(records, { lnum = math.max(flag.line - 1, 0), col = 0, message = flag.message,
+      by_buf[buf] = by_buf[buf] or vim.diagnostic.get(buf, { namespace = M.namespace })
+      table.insert(by_buf[buf], { lnum = math.max(flag.line - 1, 0), col = 0, message = flag.message,
         severity = severity, source = "Beancount", user_data = { flag = flag.flag } })
-      vim.diagnostic.set(M.namespace, buf, records)
     end
   end
+  for buf, records in pairs(by_buf) do vim.diagnostic.set(M.namespace, buf, records) end
 end
 
 function M.process_diagnostics(output, state, ticks)

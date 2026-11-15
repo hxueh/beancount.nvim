@@ -54,6 +54,22 @@ check("backend output renders hints and clears removed postings", function()
   assert(#vim.api.nvim_buf_get_extmarks(buf, hints.namespace, 0, -1, {}) == 0)
 end)
 
+check("flag warnings join errors in one update per buffer", function()
+  config.set("flag_warnings", { ["!"] = vim.diagnostic.severity.WARN })
+  diagnostics.show_errors({ { file = filename, line = 3, message = "error" } }, { filename })
+  local original, calls = vim.diagnostic.set, 0
+  vim.diagnostic.set = function(...) calls = calls + 1; return original(...) end
+  local ok, err = pcall(diagnostics.show_flags, {
+    { file = filename, line = 3, flag = "!", message = "flagged" },
+    { file = filename, line = 4, flag = "!", message = "flagged" },
+    { file = filename, line = 5, flag = "*", message = "cleared" },
+  })
+  vim.diagnostic.set = original
+  assert(ok, err)
+  assert(calls == 1, calls)
+  assert(#vim.diagnostic.get(buf, { namespace = diagnostics.namespace }) == 3)
+end)
+
 check("disabling hints removes existing marks", function()
   diagnostics.states = {}
   hints.update_data(vim.json.encode({ [filename] = { ["5"] = { "-100 USD" } } }))
